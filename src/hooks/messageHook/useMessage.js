@@ -10,7 +10,9 @@ export const useMessage = () => {
   const [messagess, setMessages] = useRecoilState(messageAtom);
   const [error, setError] = useState(null);
 
-  // FETCH ALL MESSAGES
+  // ================================
+  // FETCH ALL MESSAGES BY CONVERSATION ID
+  // ================================
   const fetchMessagesById = async (conversationId) => {
     setLoading(true);
     setError(null);
@@ -26,7 +28,7 @@ export const useMessage = () => {
         },
       });
 
-      setMessages(res); // Save full message list
+      setMessages(res); // Save message list
     } catch (err) {
       setError(err);
       console.error("Error fetching Messages: ", err);
@@ -35,7 +37,9 @@ export const useMessage = () => {
     }
   };
 
-  // ADD MESSAGE (Websocket incoming)
+  // ================================
+  // ADD MESSAGE (WebSocket incoming)
+  // ================================
   const addMessage = (msg) => {
     setMessages((prev) => ({
       ...prev,
@@ -43,7 +47,9 @@ export const useMessage = () => {
     }));
   };
 
+  // ================================
   // SEND MESSAGE (POST)
+  // ================================
   const fetchSendMessagesById = async (conversationId, messageBody) => {
     setLoading(true);
     setError(null);
@@ -60,9 +66,9 @@ export const useMessage = () => {
         },
       });
 
-      // IMPORTANT: Add sent message to chat
-      addMessage(res);
-
+      // Add the sent message to state
+      // addMessage(res);
+      console.log(res)
     } catch (err) {
       setError(err);
       console.error("Error sending message: ", err);
@@ -77,13 +83,6 @@ export const useMessage = () => {
     addMessage,
     fetchSendMessagesById,
     loading,
-    error
+    error,
   };
 };
-
-
-
-
-
-
-
