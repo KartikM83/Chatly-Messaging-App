@@ -9,7 +9,7 @@ import { useEffect, useRef } from "react";
 import useContact from "../../hooks/contactHook/useContact";
 import MessageBubble from "../uiComponent/MessageBubble";
 import MessageComposer from "../uiComponent/MessageComposer";
-import {useMessage} from "../../hooks/messageHook/useMessage";
+import { useMessage } from "../../hooks/messageHook/useMessage";
 import SockJS from "sockjs-client";
 import { Client, Stomp } from "@stomp/stompjs";
 
@@ -18,10 +18,8 @@ export default function ChatWindow() {
   const navigate = useNavigate();
   const bottomRef = useRef(null);
 
-  const { fetchConversationById, conversationById, loading, error } =
-    useContact();
-
-  const { fetchMessagesById, messagess, addMessage,fetchSendMessagesById  } = useMessage();
+  const { fetchConversationById, conversationById, loading, error,setConversationById,setConversationList,conversationList } = useContact();
+  const { fetchMessagesById, messagess, addMessage, fetchSendMessagesById } = useMessage();
 
   // Fetch conversation + messages
   useEffect(() => {
@@ -30,6 +28,63 @@ export default function ChatWindow() {
       fetchMessagesById(conversationId);
     }
   }, [conversationId]);
+
+
+
+  function updateConversationSummaryWithMessage(msg) {
+  // msg should contain at least: conversationId (or conversationId param), content, senderId, createdAt (ISO or epoch)
+  const conversationIdOfMsg = msg.conversationId || conversationId; // fallback if server doesn't include it
+  const timestamp = msg.createdAt || new Date().toISOString();
+
+  // Update conversationById cache (if this window's conversation is open)
+  setConversationById(prev => {
+    if (!prev || prev.id !== conversationIdOfMsg) return prev;
+    return {
+      ...prev,
+      lastMessage: msg.content,
+      lastMessageAt: timestamp,
+      // optionally add lastSender, lastMessageType, etc.
+    };
+  });
+
+  // Update conversationList: update lastMessage/lastMessageAt and move to top
+  setConversationList(prevList => {
+    if (!Array.isArray(prevList)) return prevList;
+
+    // Find the conversation and update it
+    const updated = prevList.reduce((acc, conv) => {
+      if (!conv) return acc;
+      if (conv.id === conversationIdOfMsg) {
+        const newConv = {
+          ...conv,
+          lastMessage: msg.content,
+          lastMessageAt: timestamp,
+        };
+        // put updated conversation at start
+        return [newConv, ...acc];
+      } else {
+        acc.push(conv);
+        return acc;
+      }
+    }, []);
+
+    // if message's conversation wasn't present in list, optionally add it:
+    const found = prevList.some(c => c?.id === conversationIdOfMsg);
+    if (!found) {
+      const newItem = {
+        id: conversationIdOfMsg,
+        lastMessage: msg.content,
+        lastMessageAt: timestamp,
+        // add other minimal fields so chat list can render (groupName or participants...)
+      };
+      return [newItem, ...prevList];
+    }
+
+    // Remove duplicates while preserving order (we moved updated to top already)
+    // But the reduce above created list with updated first then older ones.
+    return updated;
+  });
+}
 
   // Real-time WebSocket Listener
   const clientRef = useRef(null);
@@ -54,6 +109,7 @@ export default function ChatWindow() {
 
         // ⭐ ADD MESSAGE INTO UI
         addMessage(data);
+        updateConversationSummaryWithMessage(data);
       });
     };
 
@@ -72,43 +128,35 @@ export default function ChatWindow() {
     (p) => p.id !== currentUserId
   );
 
-
   const handleSendMessage = async (text) => {
-  if (!text || !conversationId) return;
+    if (!text || !conversationId) return;
 
-  const clientMessageId = crypto.randomUUID(); // unique ID from frontend
+    const clientMessageId = crypto.randomUUID(); // unique ID from frontend
 
-  console.log("text", text)
-  console.log("clientMessageId", clientMessageId)
+    console.log("text", text);
+    console.log("clientMessageId", clientMessageId);
 
+    const messageBody = {
+      content: text,
+      type: "TEXT",
+      clientMessageId,
+    };
 
-  const messageBody = {
-    content: text,
-    type: "TEXT",
-    clientMessageId,
+    console.log("messageBody", messageBody);
+
+    try {
+      // Send to backend
+      const sentMessage = await fetchSendMessagesById(conversationId, messageBody);
+      console.log("Message sent:", sentMessage);
+    } catch (err) {
+      console.error("Send error:", err);
+    }
   };
-
-  console.log("messageBody", messageBody)
-
-  try {
-    // Send to backend
-    const sentMessage = await fetchSendMessagesById(
-      conversationId,
-      messageBody
-    );
-
-    console.log("Message sent:", sentMessage);
-  } catch (err) {
-    console.error("Send error:", err);
-  }
-};
 
   // Auto-scroll on new message
   useEffect(() => {
-  bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-}, [messagess?.messages]);
-
-
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messagess?.messages]);
 
   if (!conversationId) {
     return (
@@ -117,9 +165,6 @@ export default function ChatWindow() {
       </div>
     );
   }
-
-
-  
 
   return (
     <div className="flex flex-col w-full h-full bg-background overflow-hidden">
@@ -144,7 +189,6 @@ export default function ChatWindow() {
           status={otherParticipant?.status || null}
         />
 
-   
         <div className="flex-1 min-w-0 ml-2">
           <h2 className="font-medium text-sm truncate w-[140px] md:w-full">
             {conversationById?.type === "GROUP"
@@ -159,7 +203,6 @@ export default function ChatWindow() {
           </p>
         </div>
 
-    
         <div className="flex items-center gap-1 shrink-0">
           <IconButton icon={LuVideo} variant="ghost" />
           <IconButton icon={IoCallOutline} variant="ghost" />
@@ -179,24 +222,22 @@ export default function ChatWindow() {
             </p>
           </div>
         ) : (
-           <>
-      {messagess?.messages.map((message) => (
-        <MessageBubble
-          key={message.id}
-          message={message}
-          isOwn={message.senderId === currentUserId}
-        />
-      ))}
-      <div ref={bottomRef} /> {/* ← dummy div for auto-scroll */}
-    </>
-  )}
+          <>
+            {messagess?.messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                isOwn={message.senderId === currentUserId}
+              />
+            ))}
+
+            {/* ← dummy div for auto-scroll */}
+            <div ref={bottomRef} />
+          </>
+        )}
       </div>
 
       {/* MESSAGE INPUT */}
-      {/* <div className="fixed bottom-0 w-full md:left-[416px] md:w-[calc(100%-416px)]">
-        <MessageComposer />
-      </div> */}
-
       <div className="w-full md:left-[416px] md:w-full">
         <MessageComposer onSend={handleSendMessage} />
       </div>

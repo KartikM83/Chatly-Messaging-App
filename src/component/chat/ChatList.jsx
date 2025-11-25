@@ -23,12 +23,12 @@ export default function ChatList() {
     contactList,
     loading,
     error,
-    getconversationList,
+    getConversationList,
     conversationList,
   } = useContact();
 
   useEffect(() => {
-    getconversationList();
+    getConversationList();
   }, []);
 
   const { conversationId: activeConversationId } = useParams();

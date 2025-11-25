@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { GoPaperclip } from "react-icons/go";
 import { FiSend } from "react-icons/fi";
-import { MdMicNone } from "react-icons/md";
+import { MdMicNone, MdOutlinePhotoCamera } from "react-icons/md";
 import { LuSmile } from "react-icons/lu";
 import IconButton from "./IconButton";
-import { MdOutlinePhotoCamera } from "react-icons/md";
 
 export default function MessageComposer({
   onSend,
@@ -35,9 +34,7 @@ export default function MessageComposer({
   return (
     <div className="p-2 bg-card border-t">
       <div className="flex items-center gap-2">
-        {/* Attach icon */}
-
-        {/* ✍️ Text Input Area */}
+        {/* Text Input */}
         <div className="flex-1 relative">
           <textarea
             value={message}
@@ -47,27 +44,29 @@ export default function MessageComposer({
             rows={5}
             className={cn(
               "w-full px-4 py-3 pr-12 pl-10 border border-primary/50 bg-muted/50 rounded-2xl resize-none text-sm max-h-32 overflow-y-auto",
-              "focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary/50 focus:shadow-none transition-smooth"
+              "focus:outline-none focus:ring-1 focus:ring-primary/20 focus:border-primary/50 transition-smooth"
             )}
             style={{
               minHeight: "48px",
               height: message.split("\n").length > 1 ? "auto" : "48px",
-              outline: "none", // ✅ Remove any default outline
-              boxShadow: "none", // ✅ Remove browser focus shadow
+              outline: "none",
+              boxShadow: "none",
             }}
             aria-label="Message input"
           />
 
+          {/* Emoji Icon */}
           {showEmoji && (
             <IconButton
               icon={LuSmile}
               variant="normal"
-              ariaLabel="Attach file"
-              className="absolute left-0 top-6 -translate-y-1/2  "
+              ariaLabel="Emoji"
+              className="absolute left-0 top-6 -translate-y-1/2"
             />
           )}
 
-          <div className="absolute right-0 top-6 -translate-y-1/2 flex  ">
+          {/* Attach & Camera Icons */}
+          <div className="absolute right-0 top-6 -translate-y-1/2 flex">
             {showAttach && (
               <IconButton
                 icon={GoPaperclip}
@@ -80,13 +79,13 @@ export default function MessageComposer({
               <IconButton
                 icon={MdOutlinePhotoCamera}
                 variant="normal"
-                ariaLabel="Attach file"
+                ariaLabel="Open camera"
               />
             )}
           </div>
         </div>
 
-        {/* 🎤 / 📤 Action Button */}
+        {/* Send / Mic Button */}
         {message.trim() ? (
           <IconButton
             icon={FiSend}
