@@ -61,7 +61,7 @@ export const useMessage = () => {
       });
 
       // IMPORTANT: Add sent message to chat
-      addMessage(res);
+      // addMessage(res);
 
     } catch (err) {
       setError(err);

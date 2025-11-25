@@ -114,10 +114,8 @@ const useContact = () => {
     conversationById,
     loading,
     error,
-    setConversationList,setConversationById
 
   };
 };
 
 export default useContact;
-

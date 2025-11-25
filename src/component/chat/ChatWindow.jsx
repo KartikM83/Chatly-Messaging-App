@@ -18,69 +18,10 @@ export default function ChatWindow() {
   const navigate = useNavigate();
   const bottomRef = useRef(null);
 
-  const { fetchConversationById, conversationById, loading, error,conversationList,setConversationList,setConversationById } =
+  const { fetchConversationById, conversationById, loading, error } =
     useContact();
 
   const { fetchMessagesById, messagess, addMessage,fetchSendMessagesById  } = useMessage();
-
-
-
-  function updateConversationSummaryWithMessage(msg) {
-  // msg should contain at least: conversationId (or conversationId param), content, senderId, createdAt (ISO or epoch)
-  const conversationIdOfMsg = msg.conversationId || conversationId; // fallback if server doesn't include it
-  const timestamp = msg.createdAt || new Date().toISOString();
-
-  // Update conversationById cache (if this window's conversation is open)
-  setConversationById(prev => {
-    if (!prev || prev.id !== conversationIdOfMsg) return prev;
-    return {
-      ...prev,
-      lastMessage: msg.content,
-      lastMessageAt: timestamp,
-      // optionally add lastSender, lastMessageType, etc.
-    };
-  });
-
-  // Update conversationList: update lastMessage/lastMessageAt and move to top
-  setConversationList(prevList => {
-    if (!Array.isArray(prevList)) return prevList;
-
-    // Find the conversation and update it
-    const updated = prevList.reduce((acc, conv) => {
-      if (!conv) return acc;
-      if (conv.id === conversationIdOfMsg) {
-        const newConv = {
-          ...conv,
-          lastMessage: msg.content,
-          lastMessageAt: timestamp,
-        };
-        // put updated conversation at start
-        return [newConv, ...acc];
-      } else {
-        acc.push(conv);
-        return acc;
-      }
-    }, []);
-
-    // if message's conversation wasn't present in list, optionally add it:
-    const found = prevList.some(c => c?.id === conversationIdOfMsg);
-    if (!found) {
-      const newItem = {
-        id: conversationIdOfMsg,
-        lastMessage: msg.content,
-        lastMessageAt: timestamp,
-        // add other minimal fields so chat list can render (groupName or participants...)
-      };
-      return [newItem, ...prevList];
-    }
-
-    // Remove duplicates while preserving order (we moved updated to top already)
-    // But the reduce above created list with updated first then older ones.
-    return updated;
-  });
-}
-
-
 
   // Fetch conversation + messages
   useEffect(() => {
@@ -113,7 +54,6 @@ export default function ChatWindow() {
 
         // ⭐ ADD MESSAGE INTO UI
         addMessage(data);
-         updateConversationSummaryWithMessage(data);
       });
     };
 
