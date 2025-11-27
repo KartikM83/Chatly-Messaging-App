@@ -41,11 +41,37 @@ export const useMessage = () => {
   // ADD MESSAGE (WebSocket incoming)
   // ================================
   const addMessage = (msg) => {
-    setMessages((prev) => ({
+  setMessages((prev) => {
+    if (!prev || !prev.messages) return prev;
+
+    // ❗ CASE 1: It's an ACK (Delivered/Seen)
+    if (msg.messageId && !msg.content) {
+      return {
+        ...prev,
+        messages: prev.messages.map((m) =>
+          m.id === msg.messageId
+            ? { 
+                ...m, 
+                status: msg.status,
+                readAt: msg.status === "SEEN" ? new Date().toISOString() : m.readAt
+              }
+            : m
+        ),
+      };
+    }
+
+    // ❗ CASE 2: It's a real message — prevent duplicates
+    if (prev.messages.some(m => m.id === msg.id)) {
+      return prev;
+    }
+
+    return {
       ...prev,
-      messages: [...(prev?.messages || []), msg],
-    }));
-  };
+      messages: [...prev.messages, msg],
+    };
+  });
+};
+
 
   // ================================
   // SEND MESSAGE (POST)
@@ -69,6 +95,7 @@ export const useMessage = () => {
       // Add the sent message to state
       // addMessage(res);
       console.log(res)
+      return res
     } catch (err) {
       setError(err);
       console.error("Error sending message: ", err);
@@ -76,12 +103,84 @@ export const useMessage = () => {
       setLoading(false);
     }
   };
+  
+
+  const markMessagesAsRead = async (conversationId, messageIds = []) => {
+  try {
+    const token = sessionStorage.getItem("token");
+
+    const body = {
+      messageIds: messageIds,
+      readAt: new Date().toISOString(),
+    };
+
+    await fetchData({
+      method: "POST",
+      url: `${conf.apiBaseUrl}conversation/${conversationId}/messages/read`,
+      data: body,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (err) {
+    console.error("Read-status update failed", err);
+  }
+};
+
+const acknowledgeDelivered = async (conversationId,messageId) => {
+  try {
+    const token = sessionStorage.getItem("token");
+
+    await fetchData({
+      method: "POST",
+      url: `${conf.apiBaseUrl}conversation/${conversationId}/messages/ack`,
+      data: {
+        messageId,
+        status: "DELIVERED",
+        deliveredAt: new Date().toISOString()
+      },
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+  } catch (err) {
+    console.error("Deliver-ACK failed", err);
+  }
+};
+
+const syncDelivered = async () => {
+  try {
+    const token = sessionStorage.getItem("token");
+
+    await fetchData({
+      method: "POST",
+      url: `${conf.apiBaseUrl}conversation/messages/sync-delivered`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("[SYNC-DELIVERED] Request sent successfully");
+  } catch (err) {
+    console.error("[SYNC-DELIVERED] failed", err);
+  }
+};
+
+
+
+
+
+
 
   return {
     fetchMessagesById,
     messagess,
     addMessage,
+    setMessages,
     fetchSendMessagesById,
+    markMessagesAsRead,
+    acknowledgeDelivered,
+    syncDelivered,
     loading,
     error,
   };
