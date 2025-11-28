@@ -5,6 +5,7 @@ import VerifyOTP from "../pages/auth/VerifyOTP";
 import ProfileSetup from "../pages/auth/ProfileSetup";
 import Layout from "../component/layouts/Layout";
 import Chats from "../pages/module/chats/Chats";
+import { WebSocketProvider } from "../component/chat/WebSocketProvider";
 
 export default function PublicRoute() {
   return (
@@ -14,19 +15,17 @@ export default function PublicRoute() {
       <Route path="/verify-otp" element={<VerifyOTP />} />
       <Route path="/profile-setup" element={<ProfileSetup />} />
 
-     <Route element={<Layout />}>
+      <Route
+        element={
+          <WebSocketProvider>
+            <Layout />
+          </WebSocketProvider>
+        }
+      >
         <Route path="/layout" element={<Layout />} />
 
         <Route path="/chats" element={<Chats />} />
         <Route path="/chats/:conversationId" element={<Chats />} />
-
-       
-
-     
-
-     
-      
-
       </Route>
     </Routes>
   );

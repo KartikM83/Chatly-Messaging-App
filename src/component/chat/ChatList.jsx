@@ -1,6 +1,6 @@
 import { LuMessageSquarePlus } from "react-icons/lu";
 import IconButton from "../uiComponent/IconButton";
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import SearchInput from "../uiComponent/SearchInput";
 import { contacts } from "../../data/sampleData";
 import Avatar from "../uiComponent/Avatar";
@@ -10,6 +10,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { RiUnpinLine } from "react-icons/ri";
 import { BsPinAngle, BsThreeDotsVertical } from "react-icons/bs";
 import { MdOutlinePhotoCamera } from "react-icons/md";
+import useConversation from "../../hooks/conversationHook/useConversation";
 
 export default function ChatList() {
   const [openContactList, setOpenContactList] = useState(false);
@@ -26,6 +27,16 @@ export default function ChatList() {
     getConversationList,
     conversationList,
   } = useContact();
+
+
+  const{
+      loading : conversationLoading,
+        error: conversationError,
+        conversation,
+        crateConversation
+  } = useConversation();
+
+
 
   useEffect(() => {
     getConversationList();
@@ -88,6 +99,14 @@ console.log("conversation",conversationList)
     return false;
   });
 
+  const handleContactClick = (participantId) => {
+
+    console.log("participantId",participantId); 
+    crateConversation(participantId);
+    setOpenContactList(false);
+    navigate(`/chats/${conversation.id}`);
+  };
+
   return (
     <div className="flex flex-col h-full bg-card overflow-hidden">
       <div className="p-2 border-b ">
@@ -131,7 +150,9 @@ console.log("conversation",conversationList)
                     <div
                       key={contact.userId}
                       className="px-4 py-3 hover:bg-muted/50 cursor-pointer"
+                      onClick={() => handleContactClick(contact.userId)}
                     >
+                   
                       <div className="flex items-center gap-3">
                         <Avatar
                           src={contact.profileImage}
@@ -152,7 +173,7 @@ console.log("conversation",conversationList)
                     <div
                       key={contact.phoneNumber}
                       className="px-4 py-3 hover:bg-muted/50 cursor-pointer"
-                      // onClick={() => handleContactClick(contact.id)}
+                      
                     >
                       <div className="flex items-center gap-3 ">
                         <Avatar

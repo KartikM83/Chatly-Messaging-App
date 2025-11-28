@@ -19,15 +19,53 @@ export default function ChatWindow() {
   const bottomRef = useRef(null);
 
   const { fetchConversationById, conversationById, loading, error,setConversationById,setConversationList,conversationList } = useContact();
-  const { fetchMessagesById, messagess, addMessage, fetchSendMessagesById } = useMessage();
+  const { fetchMessagesById, messagess, addMessage, fetchSendMessagesById,markMessagesAsRead ,setMessages,acknowledgeDelivered} = useMessage();
 
   // Fetch conversation + messages
   useEffect(() => {
     if (conversationId) {
       fetchConversationById(conversationId);
       fetchMessagesById(conversationId);
+     
     }
   }, [conversationId]);
+
+//   useEffect(() => {
+//   if (!messagess.messages || messagess.messages.length === 0) return;
+
+//   const unread = messagess.messages.filter(
+//     m => m.senderId !== currentUserId && m.status !== "SEEN"
+//   );
+
+//   if (unread.length > 0) {
+//     markMessagesAsRead(conversationId, unread.map(m => m.id));
+//   }
+// }, [messagess.messages]);
+
+useEffect(() => {
+  if (!messagess?.messages || messagess.messages.length === 0) return;
+  if (!currentUserId) return;
+
+  const unread = messagess.messages.filter(
+    (m) => m.senderId !== currentUserId && m.status !== "SEEN"
+  );
+
+  if (unread.length > 0) {
+    markMessagesAsRead(conversationId, unread.map((m) => m.id));
+  }
+}, [messagess?.messages]);
+
+
+ const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const currentUserId = storedUser?.id;
+
+  const otherParticipant = conversationById?.participants?.find(
+    (p) => p.id !== currentUserId
+  );
+
+
+
+
 
 
 
@@ -103,15 +141,52 @@ export default function ChatWindow() {
       console.log("Connected to WebSocket");
 
       // ⭐ CORRECT TOPIC
-      client.subscribe(`/topic/conversations/${conversationId}`, (message) => {
-        const data = JSON.parse(message.body);
-        console.log("WS Received:", data);
+   client.subscribe(`/topic/conversations/${conversationId}`, (message) => {
+  const data = JSON.parse(message.body);
+  console.log("WS Received:", data);
 
-        // ⭐ ADD MESSAGE INTO UI
-        addMessage(data);
-        updateConversationSummaryWithMessage(data);
-      });
+  const isAck = data.messageId && !data.content;
+
+  // ⭐ 1. ACK messages → update status only
+  if (isAck) {
+    addMessage(data);
+    return;  // stop here
+  }
+
+  // ⭐ 2. REAL MESSAGE → add to UI
+  addMessage(data);
+
+  console.log("check",data.senderId && data.senderId !== currentUserId)
+  console.log("cureent",currentUserId)
+  console.log("sender", data.senderId)
+
+ 
+
+  // ⭐ 4. Update conversation list panel
+  updateConversationSummaryWithMessage(data);
+});
+
+
+
+
+      client.subscribe(`/topic/conversations/${conversationId}/read`, (m) => {
+  const updated = JSON.parse(m.body); // list of updated messages
+  
+  setMessages(prev => ({
+    ...prev,
+    messages: prev.messages.map(msg =>
+      updated.find(u => u.id === msg.id) || msg
+    )
+  }));
+});
+
+
+
+
+
     };
+
+    
 
     client.activate();
     clientRef.current = client;
@@ -121,13 +196,7 @@ export default function ChatWindow() {
     };
   }, [conversationId]);
 
-  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-  const currentUserId = storedUser?.id;
-
-  const otherParticipant = conversationById?.participants?.find(
-    (p) => p.id !== currentUserId
-  );
-
+ 
   const handleSendMessage = async (text) => {
     if (!text || !conversationId) return;
 
@@ -190,7 +259,7 @@ export default function ChatWindow() {
         />
 
         <div className="flex-1 min-w-0 ml-2">
-          <h2 className="font-medium text-sm truncate w-[140px] md:w-full">
+          <h2 className="font-medium text-sm truncate w-[110px] md:w-full">
             {conversationById?.type === "GROUP"
               ? conversationById?.groupName
               : otherParticipant?.name || "Unknown"}
