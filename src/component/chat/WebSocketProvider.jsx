@@ -32,19 +32,51 @@ export const WebSocketProvider = ({ children }) => {
     const socket = new SockJS("http://localhost:8080/ws-chat");
 
     const client = new Client({
-      webSocketFactory: () => socket,
+      webSocketFactory: () => socket, 
       reconnectDelay: 5000, // auto-reconnect
       debug: (str) => console.log("[STOMP]", str),
     });
 
     client.onConnect = () => {
-      console.log("✅ Global WebSocket connected");
-      setConnected(true);
-         // 🔁 As soon as WS is up, ask backend to sync all SENT -> DELIVERED for this user
-      console.log("[WS] Connected, syncing delivered messages...");
-      syncDelivered();
-      
-    };
+  console.log("✅ Global WebSocket connected");
+  setConnected(true);
+
+  console.log("[WS] Connected, syncing delivered messages...");
+  syncDelivered();
+
+  // ⭐ Subscribe to "conversation events" for this user
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const currentUserId = storedUser?.id;
+
+  if (currentUserId) {
+    const destination = `/topic/users/${currentUserId}/conversations`;
+    console.log("🔔 Subscribing to user conversation topic:", destination);
+
+    const sub = client.subscribe(destination, (message) => {
+      const data = JSON.parse(message.body);
+      console.log("🌍 New/updated conversation via WS:", data);
+
+      // data is ConversationResponseDTO from backend
+      setConversationList((prev) => {
+        const conv = data;
+        if (!conv || !conv.id) return prev;
+
+        if (!Array.isArray(prev) || prev.length === 0) {
+          return [conv];
+        }
+
+        // remove existing instance if any (no duplicates)
+        const without = prev.filter((c) => c && c.id !== conv.id);
+
+        // put new/updated conversation at top
+        return [conv, ...without];
+      });
+    });
+
+    // store subscription so we can clean up if needed
+    subscriptionsRef.current[destination] = sub;
+  }
+};
 
 
     client.onStompError = (frame) => {

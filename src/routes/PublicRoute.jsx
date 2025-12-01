@@ -7,6 +7,8 @@ import Layout from "../component/layouts/Layout";
 import Chats from "../pages/module/chats/Chats";
 import { WebSocketProvider } from "../component/chat/WebSocketProvider";
 
+import Archived from "../pages/module/archived/archived";
+
 export default function PublicRoute() {
   return (
     <Routes>
@@ -26,6 +28,9 @@ export default function PublicRoute() {
 
         <Route path="/chats" element={<Chats />} />
         <Route path="/chats/:conversationId" element={<Chats />} />
+
+        <Route path="/archived" element={<Archived />} />
+        <Route path="/archived/:conversationId" element={<Archived />} />
       </Route>
     </Routes>
   );

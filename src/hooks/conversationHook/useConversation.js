@@ -101,12 +101,77 @@ const useConversation = () => {
     }
   };
 
+  const archiveConversation = async (conversationId) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchData({
+        method:"POST",
+        url: `${conf.apiBaseUrl}conversations/${conversationId}/archive`,
+      });
+      console.log("Archive conversation response: ", res);
+      setConversation(res);
+      return res;
+    } catch (err) {
+      setError(err);
+      console.error("Error archiving conversation: ", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }   
+  };
+
+   const unarchiveConversation = async (conversationId) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchData({
+        method:"POST",
+        url: `${conf.apiBaseUrl}conversations/${conversationId}/unarchive`,
+      });
+      console.log("Unarchive conversation response: ", res);
+      setConversation(res);
+      return res;
+    } catch (err) {
+      setError(err);
+      console.error("Error unarchiving conversation: ", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }   
+  };
+
+  const deleteConversation = async (conversationId) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchData({
+        method:"POST",
+        url: `${conf.apiBaseUrl}conversations/${conversationId}/delete`,
+      });
+      console.log("delete conversation response: ", res);
+      setConversation(res);
+      return res;
+    } catch (err) {
+      setError(err);
+      console.error("Error delete conversation: ", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }   
+  };
+
+
   return {
     loading,
     error,
     conversation,
     createDirectConversation,
     createGroupConversation,
+    archiveConversation,
+    setConversation,
+    unarchiveConversation,
+    deleteConversation
   };
 };
 
