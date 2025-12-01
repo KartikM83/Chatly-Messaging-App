@@ -13,13 +13,57 @@ import { useMessage } from "../../hooks/messageHook/useMessage";
 import SockJS from "sockjs-client";
 import { Client, Stomp } from "@stomp/stompjs";
 
+function groupMessagesByDate(messages = []) {
+  const map = new Map();
+
+  messages.forEach((msg) => {
+    if (!msg?.timestamp) return;
+
+    const d = new Date(msg.timestamp);
+    const dateKey = d.toDateString(); // local calendar day
+
+    if (!map.has(dateKey)) {
+      map.set(dateKey, []);
+    }
+    map.get(dateKey).push(msg);
+  });
+
+  return Array.from(map.entries())
+    .map(([dateKey, msgs]) => ({
+      dateKey,
+      date: new Date(msgs[0].timestamp),
+      messages: msgs,
+    }))
+    .sort((a, b) => a.date - b.date); // oldest day first
+}
+
+function formatDateLabel(date) {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (d1, d2) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  if (isSameDay(date, today)) return "Today";
+  if (isSameDay(date, yesterday)) return "Yesterday";
+
+  return date.toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function ChatWindow() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
   const bottomRef = useRef(null);
 
-  const { fetchConversationById, conversationById, loading, error,setConversationById,setConversationList,conversationList } = useContact();
-  const { fetchMessagesById, messagess, addMessage, fetchSendMessagesById,markMessagesAsRead ,setMessages,acknowledgeDelivered} = useMessage();
+  const { fetchConversationById, conversationById, setConversationById,setConversationList } = useContact();
+  const { fetchMessagesById, messagess, addMessage, fetchSendMessagesById,markMessagesAsRead ,setMessages} = useMessage();
 
   // Fetch conversation + messages
   useEffect(() => {
@@ -235,6 +279,8 @@ useEffect(() => {
     );
   }
 
+    const groupedMessages = groupMessagesByDate(messagess?.messages || []);
+
   return (
     <div className="flex flex-col w-full h-full bg-background overflow-hidden">
       {/* HEADER */}
@@ -280,8 +326,8 @@ useEffect(() => {
       </div>
 
       {/* MESSAGES */}
-      <div className="flex-1 overflow-y-auto p-4 ">
-        {messagess?.messages.length === 0 ? (
+      <div className="flex-1 overflow-y-auto p-4">
+        {groupedMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <p className="font-medium mb-1 text-muted-foreground">
               No messages yet
@@ -292,15 +338,26 @@ useEffect(() => {
           </div>
         ) : (
           <>
-            {messagess?.messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                isOwn={message.senderId === currentUserId}
-              />
+            {groupedMessages.map((group) => (
+              <div key={group.dateKey}>
+                {/* Date chip */}
+                <div className="flex justify-center my-3">
+                  <span className="px-3 py-1 text-xs rounded-full bg-muted text-muted-foreground">
+                    {formatDateLabel(group.date)}
+                  </span>
+                </div>
+
+                {/* Messages for this date */}
+                {group.messages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    isOwn={message.senderId === currentUserId}
+                  />
+                ))}
+              </div>
             ))}
 
-            {/* ← dummy div for auto-scroll */}
             <div ref={bottomRef} />
           </>
         )}
