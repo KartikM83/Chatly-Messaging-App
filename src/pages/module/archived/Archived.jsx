@@ -3,6 +3,7 @@ import ChatList from "../../../component/chat/ChatList";
 import ChatWindow from "../../../component/chat/ChatWindow";
 import { useEffect, useState } from "react";
 import ArchivedList from "../../../component/archived/ArchivedList";
+import BottomNav from "../../../component/navigation/BottomNav";
 
 export default function Archived() {
   const { conversationId } = useParams();
@@ -28,6 +29,7 @@ export default function Archived() {
         {!conversationId && (
           <div className="w-full">
             <ArchivedList />
+             <BottomNav />
           </div>
         )}
 

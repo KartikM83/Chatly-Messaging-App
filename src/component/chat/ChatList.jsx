@@ -37,7 +37,7 @@ export default function ChatList() {
   const [groupName, setGroupName] = useState("");
   const [groupIconFile, setGroupIconFile] = useState(null);
   const [groupIconPreview, setGroupIconPreview] = useState(null);
-    const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [selectedConversationId, setSelectedConversationId] = useState(null);
 
   const {
     getContactList,
@@ -51,7 +51,7 @@ export default function ChatList() {
     createDirectConversation,
     createGroupConversation,
     archiveConversation,
-    deleteConversation
+    deleteConversation,
   } = useConversation();
 
   useEffect(() => {
@@ -59,6 +59,9 @@ export default function ChatList() {
   }, []);
 
   const { conversationId: activeConversationId } = useParams();
+    // CURRENT USER
+      const storedUser = JSON.parse(localStorage.getItem("user"));
+      const currentUserId = storedUser?.id;
 
   const filterByNameOrNumber = (list = []) => {
     if (!Array.isArray(list)) return [];
@@ -79,8 +82,7 @@ export default function ChatList() {
 
   console.log("matches", contactList?.matches);
 
-
-   // ✅ Context menu state (Desktop)
+  // ✅ Context menu state (Desktop)
   const [contextMenu, setContextMenu] = useState({
     visible: false,
     x: 0,
@@ -92,7 +94,7 @@ export default function ChatList() {
   const longPressTimer = useRef(null);
   const boxRef = useRef(null);
 
-    // ✅ Close context menu when clicking outside
+  // ✅ Close context menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (contextMenu.visible && !event.target.closest(".context-menu")) {
@@ -104,7 +106,7 @@ export default function ChatList() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [contextMenu]);
 
-    // ✅ Right click (Desktop)
+  // ✅ Right click (Desktop)
   const handleRightClick = (e, conversationId) => {
     console.log("Right click detected on conversation:", conversationId);
     e.preventDefault();
@@ -115,7 +117,6 @@ export default function ChatList() {
       conversationId,
     });
   };
-
 
   // ✅ Long press (Mobile)
   const handleTouchStart = (conversationId) => {
@@ -128,68 +129,65 @@ export default function ChatList() {
 
   // ✅ Context Menu / Header Action Handler
   const handleMenuAction = async (action) => {
-  const targetId = contextMenu.conversationId || selectedConversationId;
-  if (!targetId) return;
+    const targetId = contextMenu.conversationId || selectedConversationId;
+    if (!targetId) return;
 
-  try {
-    switch (action) {
-      case "archive": {
-        const res = await archiveConversation(targetId); 
-        console.log("Archive action response: ", res);
-        await getConversationList();
-        break;
+    try {
+      switch (action) {
+        case "archive": {
+          const res = await archiveConversation(targetId);
+          console.log("Archive action response: ", res);
+          await getConversationList();
+          break;
+        }
+        case "pin":
+          // await pinUnpinConversation(targetId);
+          break;
+        case "delete":
+          await deleteConversation(targetId);
+          await getConversationList();
+          break;
+        default:
+          break;
       }
-      case "pin":
-        // await pinUnpinConversation(targetId);
-        break;
-      case "delete":
-        await deleteConversation(targetId);
-        await getConversationList();
-        break;
-      default:
-        break;
+    } catch (err) {
+      console.error("Action failed:", action, err);
     }
-  } catch (err) {
-    console.error("Action failed:", action, err);
-  }
 
-  setContextMenu({ visible: false, conversationId: null });
-  setSelectedConversationId(null);
-};
+    setContextMenu({ visible: false, conversationId: null });
+    setSelectedConversationId(null);
+  };
 
   const conversationFilter = (conversationList || [])
-   .filter((conversation) => !conversation.archived)
-  .filter((conversation) => {
+    .filter((conversation) => !conversation.archived)
+    .filter((conversation) => {
+      const query = searchQuery.toLowerCase();
 
-    const query = searchQuery.toLowerCase();
+    
 
-    // CURRENT USER
-    const storedUser = JSON.parse(localStorage.getItem("user"));
-    const currentUserId = storedUser?.id;
+      // -------------------------------
+      // DIRECT CHAT SEARCH
+      // -------------------------------
+      if (conversation.type === "DIRECT") {
+        const otherUser = conversation.participants?.find(
+          (p) => p.id !== currentUserId
+        );
+        const name = otherUser?.name?.toLowerCase() || "";
+        const number = otherUser?.phoneNumber || "";
 
-    // -------------------------------
-    // DIRECT CHAT SEARCH
-    // -------------------------------
-    if (conversation.type === "DIRECT") {
-      const otherUser = conversation.participants?.find(
-        (p) => p.id !== currentUserId
-      );
-      const name = otherUser?.name?.toLowerCase() || "";
-      const number = otherUser?.phoneNumber || "";
+        return name.includes(query) || number.includes(query);
+      }
 
-      return name.includes(query) || number.includes(query);
-    }
+      // -------------------------------
+      // GROUP CHAT SEARCH
+      // -------------------------------
+      if (conversation.type === "GROUP") {
+        const group = conversation.groupName?.toLowerCase() || "";
+        return group.includes(query);
+      }
 
-    // -------------------------------
-    // GROUP CHAT SEARCH
-    // -------------------------------
-    if (conversation.type === "GROUP") {
-      const group = conversation.groupName?.toLowerCase() || "";
-      return group.includes(query);
-    }
-
-    return false;
-  });
+      return false;
+    });
 
   const handleContactClick = async (participantId) => {
     try {
@@ -319,7 +317,7 @@ export default function ChatList() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card overflow-hidden">
+    <div className="w-full flex flex-col h-full bg-card overflow-hidden">
       <div className="p-2 border-b ">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-heading font-bold">
@@ -336,7 +334,7 @@ export default function ChatList() {
               onClick={(e) => {
                 e.stopPropagation();
                 getContactList();
-                setOpenContactList(true);
+                setOpenContactList((prev) => !prev);
                 setNewChatScreen("HOME");
                 setSelectedGroupContacts([]);
                 setGroupName("");
@@ -345,12 +343,263 @@ export default function ChatList() {
                 setOpenbox(false);
               }}
             />
+          </div>
 
-            {openContactList && (
+          {/* ✅ Mobile Header Actions */}
+
+          <div className="md:hidden flex items-center gap-2 ">
+            {selectedConversationId ? (
+              <>
+                <button onClick={() => handleMenuAction("pin")}>
+                  {conversationList.find((c) => c.id === selectedConversationId)
+                    ?.isPinned ? (
+                    <IconButton
+                      icon={RiUnpinLine}
+                      variant="normal"
+                      ariaLabel="Unpin Chat"
+                      size="md"
+                    />
+                  ) : (
+                    <IconButton
+                      icon={BsPinAngle}
+                      variant="normal"
+                      ariaLabel="Pin Chat"
+                      size="md"
+                    />
+                  )}
+                </button>
+
+                <button onClick={() => handleMenuAction("archive")}>
+                  <IconButton
+                    icon={LuArchive}
+                    variant="normal"
+                    ariaLabel="Archive Chat"
+                    size="md"
+                  />
+                </button>
+
+                <button onClick={() => handleMenuAction("delete")}>
+                  <IconButton
+                    icon={RiDeleteBin6Line}
+                    variant="normal"
+                    ariaLabel="Delete Chat"
+                    size="md"
+                  />
+                </button>
+
+                <button
+                  onClick={() => {
+                    selectedConversationId(null);
+                    setContextMenu({ visible: false, conversationId: null });
+                  }}
+                >
+                  <IconButton
+                    icon={BsThreeDotsVertical}
+                    variant="normal"
+                    ariaLabel="Cancel Selection"
+                    size="md"
+                  />
+                </button>
+              </>
+            ) : (
+              <>
+                <IconButton
+                  icon={MdOutlinePhotoCamera}
+                  variant="normal"
+                  ariaLabel="Open Camera"
+                  size="md"
+                />
+                <IconButton
+                  icon={BsThreeDotsVertical}
+                  variant="normal"
+                  ariaLabel="More Options"
+                  size="md"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenbox((prev) => !prev);
+                    setOpenContactList(false);
+                  }}
+                />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* 3-dot Dropdown */}
+        {openbox && (
+          <div
+            ref={boxRef}
+            className="absolute z-[1000] top-12 right-1 rounded-xl w-48 bg-card py-4 flex flex-col gap-2 shadow-[0_0_12px_rgba(0,0,0,0.2)]"
+          >
+            <span
+              className="px-3 py-2 hover:bg-gray-100 cursor-pointer transition"
+              onClick={() => console.log("Starred clicked")}
+            >
+              Starred
+            </span>
+            <span
+              className="px-3 py-2 hover:bg-gray-100 cursor-pointer transition"
+            onClick={() => navigate("/settings")}
+
+            >
+              {" "}
+              Settings{" "}
+            </span>{" "}
+          </div>
+        )}
+
+        <SearchInput
+          value={searchQuery}
+          onChange={setSearchQuery}
+          placeholder="Search or start a new chat"
+        />
+      </div>
+      <div className="flex-1 overflow-y-auto ">
+        {conversationFilter.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground px-6">
+            <p className="text-lg font-medium">No chats yet</p>
+            <p className="text-sm">Select a contact to start a conversation</p>
+          </div>
+        ) : (
+          conversationFilter.map((conversation) => {
+            if (!conversation) return null;
+
+            // Get current logged in user
+            const storedUser = JSON.parse(localStorage.getItem("user"));
+            const currentUserId = storedUser?.id;
+
+            let displayName = "";
+            let displayImage = "";
+
+            // ----------------------------
+            //   CASE 1: DIRECT CHAT
+            // ----------------------------
+            if (conversation.type === "DIRECT") {
+              const otherUser = conversation.participants.find(
+                (p) => p.id !== currentUserId
+              );
+
+              displayName = otherUser?.name;
+              displayImage = otherUser?.profileImage;
+            }
+
+            // ----------------------------
+            //   CASE 2: GROUP CHAT
+            // ----------------------------
+            if (conversation.type === "GROUP") {
+              displayName = conversation.groupName; // GROUP NAME
+
+              // Use the group admin OR first participant as image
+              displayImage = conversation?.groupProfileImage;
+
+              {
+                console.log("displayImage", displayImage);
+              }
+            }
+
+            const isActive = activeConversationId === conversation.id;
+
+            return (
               <div
-                ref={contactListRef}
-                className="absolute z-[1000] top-[109px] left-[370px] rounded-[8px] w-[330px] h-[500px] bg-card shadow-lg overflow-hidden"
+                key={conversation.id}
+                onClick={() => navigate(`/chats/${conversation.id}`)}
+                className={`flex items-center gap-3 px-4 py-3  cursor-pointer ${
+                  isActive ? "bg-muted/60" : "hover:bg-muted/50"
+                }`}
+                onContextMenu={(e) => handleRightClick(e, conversation.id)} // 🖱 Desktop
+                onTouchStart={() => handleTouchStart(conversation.id)} // 📱 Mobile long press
+                onTouchEnd={handleTouchEnd}
               >
+                <Avatar src={displayImage} alt={displayName} size="lg" />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-medium text-sm truncate flex items-center gap-1.5">
+                      {displayName}
+                      {/* {chat.isPinned && (
+              <LuPin className="w-3.5 h-3.5 text-muted-foreground" />
+            )} */}
+                      {/* {chat.archived && (
+              <div className="bg-primary text-white text-[10px] px-1 rounded-[2px]">
+                archived
+              </div>
+            )} */}
+                    </h3>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(conversation.lastMessageAt).toLocaleTimeString(
+                        [],
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center ">
+                    <p className="flex-1 w-40 text-sm text-muted-foreground truncate">
+
+                      {conversation.lastMessage
+                        ? conversation.lastMessage
+                        : "No messages yet"}
+                    </p>
+                    {conversation.unreadCount === 0 ? (
+                      ""
+                    ) : (
+                      <div className="bg-primary font-heading text-white text-[11px] px-2 py-0.5 flex items-center justify-center rounded-full">
+                        {conversation.unreadCount}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Conversation start button - Mobile */}
+
+      <div className="absolute bottom-28 right-4 md:hidden">
+        <IconButton
+          icon={LuMessageSquarePlus}
+          variant="primary"
+          ariaLabel="New Chat"
+          size="xl"
+          onClick={(e) => {
+            e.stopPropagation();
+            getContactList();
+            setOpenContactList((prev) => !prev);
+            setNewChatScreen("HOME");
+            setSelectedGroupContacts([]);
+            setGroupName("");
+            setGroupIconFile(null);
+            setGroupIconPreview(null);
+            setOpenbox(false);
+          }}
+        />
+      </div>
+
+      {openContactList && (
+
+         <div
+    className="
+      fixed inset-0 z-[1000]
+      flex justify-center items-end md:items-start
+      bg-black/40 md:bg-transparent
+       md:pointer-events-none
+    "
+  >
+                <div
+      ref={contactListRef}
+      className="
+        w-full h-[100%] bg-card shadow-lg overflow-hidden
+       
+        md:rounded-[8px] md:w-[330px] md:h-[500px]
+        md:absolute md:top-[109px] md:left-[370px]
+         pointer-events-auto
+      "
+    >
                 <div className="relative w-full h-full">
                   {/* ======================
           SCREEN 1: NEW CHAT
@@ -360,9 +609,19 @@ export default function ChatList() {
         ${newChatScreen === "HOME" ? "translate-x-0" : "-translate-x-full"}`}
                   >
                     <div className="flex flex-col gap-2 px-4 py-4 border-b">
-                      <span className="text-xl font-heading font-bold">
+                      <div className="flex items-center gap-2">
+                         <IconButton
+                                  icon={IoMdArrowBack}
+                                  variant="ghost"
+                                  onClick={()=> setOpenContactList(false)}
+                                  ariaLabel="Back"
+                                  className="md:hidden"
+                                />
+                                <span className="text-xl font-heading font-bold">
                         New chat
                       </span>
+                      </div>
+                      
                       <SearchInput
                         value={searchContact}
                         onChange={setSearchContact}
@@ -695,232 +954,21 @@ export default function ChatList() {
                   )}
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* ✅ Mobile Header Actions */}
-
-          <div className="md:hidden flex items-center gap-2">
-            {selectedConversationId ? (
-              <>
-                <button onClick={() => handleMenuAction("pin")}>
-                  {conversationList.find((c) => c.id === selectedConversationId)?.isPinned ? (
-                    <IconButton
-                      icon={RiUnpinLine}
-                      variant="normal"
-                      ariaLabel="Unpin Chat"
-                      size="md"
-                    />
-                  ) : (
-                    <IconButton
-                      icon={BsPinAngle}
-                      variant="normal"
-                      ariaLabel="Pin Chat"
-                      size="md"
-                    />
-                  )}
-                </button>
-
-                <button onClick={() => handleMenuAction("archive")}>
-                  <IconButton
-                    icon={LuArchive}
-                    variant="normal"
-                    ariaLabel="Archive Chat"
-                    size="md"
-                  />
-                </button>
-
-                <button onClick={() => handleMenuAction("delete")}>
-                  <IconButton
-                    icon={RiDeleteBin6Line}
-                    variant="normal"
-                    ariaLabel="Delete Chat"
-                    size="md"
-                  />
-                </button>
-
-                <button
-                  onClick={() => {
-                    selectedConversationId(null);
-                    setContextMenu({ visible: false, conversationId: null });
-                  }}
-                >
-                  <IconButton
-                    icon={BsThreeDotsVertical}
-                    variant="normal"
-                    ariaLabel="Cancel Selection"
-                    size="md"
-                  />
-                </button>
-              </>
-            ) :(
-              <>
-              <IconButton
-              icon={MdOutlinePhotoCamera}
-              variant="normal"
-              ariaLabel="Open Camera"
-              size="md"
-            />
-            <IconButton
-              icon={BsThreeDotsVertical}
-              variant="normal"
-              ariaLabel="More Options"
-              size="md"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenbox((prev) => !prev);
-                setOpenContactList(false);
-              }}
-            />
-
-              </>
-            )}
-            
-          </div>
-        </div>
-
-        {/* 3-dot Dropdown */}
-        {openbox && (
-          <div
-            ref={boxRef}
-            className="absolute z-[1000] top-12 right-1 rounded-xl w-48 bg-card py-4 flex flex-col gap-2 shadow-[0_0_12px_rgba(0,0,0,0.2)]"
-          >
-            <span
-              className="px-3 py-2 hover:bg-gray-100 cursor-pointer transition"
-              onClick={() => console.log("Starred clicked")}
-            >
-              Starred
-            </span>
-            <span
-              className="px-3 py-2 hover:bg-gray-100 cursor-pointer transition"
-              onClick={() => navigate(`/settings`)}
-            >
-              {" "}
-              Settings{" "}
-            </span>{" "}
-          </div>
-        )}
-
-        <SearchInput
-          value={searchQuery}
-          onChange={setSearchQuery}
-          placeholder="Search or start a new chat"
-        />
-      </div>
-      <div className="flex-1 overflow-y-auto ">
-        {conversationFilter.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground px-6">
-            <p className="text-lg font-medium">No chats yet</p>
-            <p className="text-sm">Select a contact to start a conversation</p>
-          </div>
-        ) : (
-          conversationFilter.map((conversation) => {
-            if (!conversation) return null;
-
-            // Get current logged in user
-            const storedUser = JSON.parse(localStorage.getItem("user"));
-            const currentUserId = storedUser?.id;
-
-            let displayName = "";
-            let displayImage = "";
-
-            // ----------------------------
-            //   CASE 1: DIRECT CHAT
-            // ----------------------------
-            if (conversation.type === "DIRECT") {
-              const otherUser = conversation.participants.find(
-                (p) => p.id !== currentUserId
-              );
-
-              displayName = otherUser?.name;
-              displayImage = otherUser?.profileImage;
-            }
-
-            // ----------------------------
-            //   CASE 2: GROUP CHAT
-            // ----------------------------
-            if (conversation.type === "GROUP") {
-              displayName = conversation.groupName; // GROUP NAME
-
-              // Use the group admin OR first participant as image
-              displayImage = conversation?.groupProfileImage;
-
-              {
-                console.log("displayImage", displayImage);
-              }
-            }
-
-            const isActive = activeConversationId === conversation.id;
-
-            return (
-              <div
-                key={conversation.id}
-                onClick={() => navigate(`/chats/${conversation.id}`)}
-                className={`flex items-center gap-3 px-4 py-3  cursor-pointer ${
-                  isActive ? "bg-muted/60" : "hover:bg-muted/50"
-                }`}
-                onContextMenu={(e) => handleRightClick(e, conversation.id)} // 🖱 Desktop
-                onTouchStart={() => handleTouchStart(conversation.id)} // 📱 Mobile long press
-                onTouchEnd={handleTouchEnd}
-              >
-                <Avatar src={displayImage} alt={displayName} size="lg" />
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-medium text-sm truncate flex items-center gap-1.5">
-                      {displayName}
-                      {/* {chat.isPinned && (
-              <LuPin className="w-3.5 h-3.5 text-muted-foreground" />
-            )} */}
-                      {/* {chat.archived && (
-              <div className="bg-primary text-white text-[10px] px-1 rounded-[2px]">
-                archived
               </div>
-            )} */}
-                    </h3>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(conversation.lastMessageAt).toLocaleTimeString(
-                        [],
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
-                      )}
-                    </span>
-                  </div>
-        
-
-                   <div className="flex justify-between items-center ">
-                    <p className="text-sm text-muted-foreground truncate">
-                      {conversation.lastMessage
-                        ? conversation.lastMessage
-                        : "No messages yet"}
-                    </p>
-                    {conversation.unreadCount  ===0 ? "" :
-                      <div className="bg-primary font-heading text-white text-[11px] px-2 py-0.5 flex items-center justify-center rounded-full">
-                        {conversation.unreadCount}
-                      </div>
-          }
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
+            )}
 
       {/* ✅ Desktop Context Menu */}
       {contextMenu.visible && (
         <div
           className="hidden md:block context-menu absolute bg-white rounded-xl shadow-lg border w-44 py-2"
           style={{ top: contextMenu.y, left: contextMenu.x, zIndex: 9 }}
-
         >
           <button
             className="block w-full text-left px-4 py-2 hover:bg-gray-100"
             onClick={() => handleMenuAction("pin")}
           >
-            {conversationList.find((c) => c.id === contextMenu.conversationId)?.pinned ? (
+            {conversationList.find((c) => c.id === contextMenu.conversationId)
+              ?.pinned ? (
               <div className="flex items-center gap-1">
                 <RiUnpinLine className="w-5 h-5" /> Unpin Chat
               </div>

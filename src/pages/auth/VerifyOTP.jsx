@@ -134,7 +134,7 @@ export default function VerifyOTP() {
 
         <div className="h-full flex flex-col items-center justify-center ">
 
-        <div className="w-fit backdrop-blur-xl shadow-elegant rounded-3xl p-12 animate-fade-in ">
+        <div className="w-fit backdrop-blur-sm  shadow-elegant rounded-3xl p-12 animate-fade-in ">
           <div className=" text-center mb-4  ">
             <div className="w-20 h-20 rounded-full gradient-primary mx-auto mb-6 flex items-center justify-center shadow-soft relative ">
               <LuPhone className="w-10 h-10 text-white" />
@@ -229,8 +229,8 @@ export default function VerifyOTP() {
 
       </div>
 
-      <div className="w-full h-screen bg-red-600 hidden md:block">
-              <div className="w-full hidden h-full lg:flex flex-1 gradient-primary p-12 items-center justify-center relative overflow-hidden">
+      <div className="w-full h-screen hidden md:block">
+              <div className="w-full hidden h-full md:flex flex-1 gradient-primary p-12 items-center justify-center relative overflow-hidden">
                 <div className="absolute inset-0 opacity-10">
                   <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
                 </div>

@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import ChatList from "../../../component/chat/ChatList";
 import ChatWindow from "../../../component/chat/ChatWindow";
 import { useEffect, useState } from "react";
+import BottomNav from "../../../component/navigation/BottomNav";
 
 export default function Chats() {
   const { conversationId } = useParams();
@@ -22,11 +23,12 @@ export default function Chats() {
   // -------------------------------
   if (isMobile) {
     return (
-      <div className="flex h-full w-full overflow-hidden">
+      <div className="flex h-full w-full">
         {/* Only ChatList if no chat selected */}
         {!conversationId && (
-          <div className="w-full">
+          <div className="w-full ">
             <ChatList />
+            <BottomNav />
           </div>
         )}
 
@@ -44,7 +46,8 @@ export default function Chats() {
   // DESKTOP LAYOUT
   // -------------------------------
   return (
-    <div className="flex h-full w-full overflow-hidden">
+ <div className="flex h-full w-full">
+
       <div className="w-full md:w-[360px] border-r">
         <ChatList />
       </div>
