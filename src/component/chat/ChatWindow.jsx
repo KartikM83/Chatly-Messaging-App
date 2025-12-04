@@ -174,7 +174,12 @@ useEffect(() => {
   useEffect(() => {
     if (!conversationId) return;
 
-    const socket = new SockJS("http://localhost:8080/ws-chat");
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+     // Remove trailing slash if any and append ws endpoint
+  const wsUrl = apiBase.replace(/\/+$/, "") + "/ws-chat";
+
+
+    const socket = new SockJS(wsUrl);
     const client = new Client({
       webSocketFactory: () => socket,
       reconnectDelay: 5000,
