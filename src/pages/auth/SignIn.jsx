@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import Label from "../../component/uiComponent/Label";
 import Button from "../../component/uiComponent/Button";
 import useSignIn from "../../hooks/authHooks/useSignIn";
-
+import Toast from "../../component/uiComponent/Toast";
 
 export default function SignIn() {
   const [selectedCountry, setSelectedCountry] = useState({
@@ -17,6 +17,9 @@ export default function SignIn() {
   });
   const [isOpen, setIsOpen] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState("");
+  const [toast, setToast] = useState(false);
+  const [otp, setOtp] = useState("");
+
 
   const navigate = useNavigate();
   const { userSignIn, loading, error } = useSignIn();
@@ -38,24 +41,45 @@ export default function SignIn() {
   };
 
   const handlePhoneSignIn = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  if (phoneNumber.length !== 10) {
-    alert("Please enter a valid 10-digit phone number");
-    return;
-  }
+    if (phoneNumber.length !== 10) {
+      alert("Please enter a valid 10-digit phone number");
+      return;
+    }
 
-  await userSignIn(phoneNumber);
-};
+    const success = await userSignIn(phoneNumber);
+
+    if (success) {
+      setOtp(success?.otp)
+      setToast(true);
+      
+
+      // Toast dikhake thoda delay ke baad navigate
+      setTimeout(() => {
+        navigate("/verify-otp", { state: { phoneNumber } });
+      }, 3000);
+    }
+  };
+
+  console.log
 
   return (
+    <div className="min-h-screen flex relative">
+      {/* ✅ GLOBAL TOAST – mobile + desktop pe dikh jayega */}
+      {toast && (
+        <Toast
+          message="OTP Sent Successfully"
+          subMessage={otp ? `Your OTP is ${otp}` : "Please check your phone for the verification code"}
+          onClose={() => setToast(false)}
+        />
+      )}
 
-    <div className="min-h-screen flex">
       <div className="w-full h-screen flex flex-col justify-center">
-        <div className=" flex items-center justify-start py-2 px-2">
+        <div className="flex items-center justify-start py-2 px-2">
           <button
-            className="w-auto  relative z-10 flex items-center h-9 rounded-md px-3 hover:bg-accent hover:text-white text-muted-foreground hover:text-foreground"
-            onClick={() => navigate("/signin")}
+            className="w-auto relative z-10 flex items-center h-9 rounded-md px-3 hover:bg-accent hover:text-white text-muted-foreground hover:text-foreground"
+            onClick={() => navigate("/")}
           >
             <FaArrowLeft className="w-4 h-4 mr-2" />
             Back to home
@@ -71,9 +95,9 @@ export default function SignIn() {
         </div>
 
         <div className="h-full flex flex-col items-center justify-center ">
-          <div className="w-full md:w-[71%] backdrop-blur-xl shadow-elegant rounded-3xl p-8 animate-fade-in   ">
-            <div className=" text-center mb-4  ">
-              <div className="w-20 h-20 rounded-full gradient-primary mx-auto mb-6 flex items-center justify-center shadow-soft relative ">
+          <div className="w-full md:w-[71%] backdrop-blur-xl shadow-elegant rounded-3xl p-8 animate-fade-in">
+            <div className="text-center mb-4">
+              <div className="w-20 h-20 rounded-full gradient-primary mx-auto mb-6 flex items-center justify-center shadow-soft relative">
                 <FiMessageCircle className="w-10 h-10 text-white" />
               </div>
               <h1 className="text-3xl font-heading font-bold mb-3">
@@ -84,21 +108,21 @@ export default function SignIn() {
               </p>
             </div>
 
-              <div className="font-heading text-center text-3xl">Enter phone number</div>
-             <p className="text-muted-foreground text-base mb-2 text-center">
+            <div className="font-heading text-center text-3xl">
+              Enter phone number
+            </div>
+            <p className="text-muted-foreground text-base mb-2 text-center">
               Select a country and enter your phone number.
             </p>
 
-            
             <form onSubmit={handlePhoneSignIn} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="phone" className="text-sm font-medium">
                   Phone number
                 </Label>
 
-                {/* Custom Country Selector */}
+                {/* Country + Phone */}
                 <div className="flex flex-col gap-3">
-                  {/* Country Dropdown */}
                   <div className="relative">
                     <button
                       type="button"
@@ -118,7 +142,6 @@ export default function SignIn() {
                       />
                     </button>
 
-                    {/* Dropdown List */}
                     {isOpen && (
                       <div className="absolute z-50 mt-2 w-full bg-white border rounded-2xl shadow-lg max-h-56 overflow-y-auto">
                         {countries.map((c) => (
@@ -143,8 +166,7 @@ export default function SignIn() {
                     )}
                   </div>
 
-                  {/* Code and Phone input */}
-                  <div className="relative w-full ">
+                  <div className="relative w-full">
                     <div className="absolute top-1/2 -translate-y-1/2 left-4 text-gray-700 font-medium">
                       {selectedCountry.code}
                     </div>
@@ -155,7 +177,6 @@ export default function SignIn() {
                       maxLength={10}
                       value={phoneNumber}
                       onChange={(e) => {
-                        // Allow only numbers and limit to 10 digits
                         const cleaned = e.target.value
                           .replace(/\D/g, "")
                           .slice(0, 10);
@@ -189,13 +210,13 @@ export default function SignIn() {
                 )}
               </Button>
             </form>
-
           </div>
         </div>
       </div>
 
-      <div className="w-full h-screen bg-red-600 hidden md:block">
-        <div className="w-full hidden h-full lg:flex flex-1 gradient-primary p-12 items-center justify-center relative overflow-hidden">
+      {/* Right side illustration (desktop only) */}
+      <div className="w-full h-screen hidden md:block">
+        <div className="w-full hidden h-full md:flex flex-1 gradient-primary p-12 items-center justify-center relative overflow-hidden">
           <div className="absolute inset-0 opacity-10">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,0.1),transparent_50%)]" />
           </div>
@@ -237,5 +258,3 @@ export default function SignIn() {
     </div>
   );
 }
-
-

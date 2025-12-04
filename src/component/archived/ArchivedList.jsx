@@ -358,7 +358,7 @@ export default function ArchivedList() {
                   </div>
 
                   <div className="flex justify-between items-center ">
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="text-sm w-40 text-muted-foreground truncate">
                       {conversation.lastMessage
                         ? conversation.lastMessage
                         : "No messages yet"}

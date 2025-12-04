@@ -27,60 +27,66 @@ const useSignIn = () => {
         data: { phoneNumber },
       });
 
+      //  alert("Profile setup response:"+res.otp);
+
       if (res?.ok === false) throw new Error(await res.text() || `Send OTP failed: ${res.status}`);
       if (res?.status && res.status >= 400) throw new Error(res.data?.message || "Failed to send OTP");
 
       setAdminResponse(res?.data || res);
       setLoading(false);
 
-      navigate("/verify-otp", { state: { phoneNumber } });
+
+      return { success: true, otp: res.otp };
     } catch (err) {
       setLoading(false);
       setError(err.message || "Failed to send OTP. Try again.");
+       return false; 
     }
   };
 
   // ------------------- VERIFY OTP -------------------
   const verifyOtp = async (phoneNumber, otp) => {
-    setLoading(true);
-    setError(null);
+  setLoading(true);
+  setError(null);
 
-    try {
-      const res = await fetchData({
-        method: "POST",
-        url: `${conf.apiBaseUrl}auth/verify-otp`,
-        data: { phoneNumber, otp },
-      });
+  try {
+    const res = await fetchData({
+      method: "POST",
+      url: `${conf.apiBaseUrl}auth/verify-otp`,
+      data: { phoneNumber, otp },
+    });
 
-      if (res?.ok === false) throw new Error(await res.text() || "OTP verification failed");
-      if (res?.status && res.status >= 400) throw new Error(res?.data?.errorMessage || "OTP verification failed");
+    if (res?.ok === false)
+      throw new Error((await res.text()) || "OTP verification failed");
+    if (res?.status && res.status >= 400)
+      throw new Error(res?.data?.errorMessage || "OTP verification failed");
 
+    const data = res?.data || res;
+    if (!data) throw new Error("Invalid API response");
 
-      localStorage.setItem("user", JSON.stringify(res.user));
-
-
-      const data = res?.data || res;
-      console.log(data);
-      if (!data) throw new Error("Invalid API response");
-
-      setAdminResponse(data);
-      sessionStorage.setItem("token", data.accessToken);
-
-      navigate("/profile-setup", {
-        state: {
-          isNew: data.isNew,
-          user: data.user || null,
-        },
-      });
-
-      return data;
-    } catch (err) {
-      setError(err.message || "OTP verification failed");
-      return null;
-    } finally {
-      setLoading(false);
+    // ✅ yahi sahi jagah hai user save karne ki
+    if (data.user) {
+      localStorage.setItem("user", JSON.stringify(data.user));
     }
-  };
+
+    setAdminResponse(data);
+    sessionStorage.setItem("token", data.accessToken);
+
+    navigate("/profile-setup", {
+      state: {
+        isNew: data.isNew,
+        user: data.user || null,
+      },
+    });
+
+    return data;
+  } catch (err) {
+    setError(err.message || "OTP verification failed");
+    return null;
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ------------------- PROFILE SETUP -------------------
   const setupProfile = async ({ name, bio, file }) => {
@@ -98,6 +104,8 @@ const useSignIn = () => {
         url: `${conf.apiBaseUrl}profile-setup`,
         data: formData,
       });
+
+     
 
       if (res?.status && res.status >= 400) throw new Error(res?.data?.error || "Failed to update profile");
 
@@ -119,12 +127,39 @@ const useSignIn = () => {
     }
   };
 
+   const logout = async () => {
+    const accessToken = sessionStorage.getItem("token");
+
+    try {
+      // optional: send token to backend (for logging / future blacklist use)
+      await fetchData({
+        method: "POST",
+        url: `${conf.apiBaseUrl}auth/logout`,
+        data: { accessToken },
+      });
+    } catch (err) {
+      console.error("Logout API failed (ignoring):", err);
+      // even if API fails, we still clear client state
+    } finally {
+      // clear client-side auth
+      sessionStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("chatly-session"); 
+      setAdminResponse(null);
+      setOtpResponse(null);
+      setError(null);
+
+      navigate("/signin");
+    }
+  };
+
   return {
     userSignIn,
     verifyOtp,
     setupProfile,
     loading,
     error,
+    logout
   };
 };
 
