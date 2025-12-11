@@ -85,14 +85,9 @@ const useContact = () => {
     setError(null);
 
     try {
-      const token = sessionStorage.getItem("token");
-
       const res = await fetchData({
         method: "GET",
         url: `${conf.apiBaseUrl}conversations/${conversationId}`,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
       });
 
       console.log("Response:", res);
@@ -100,6 +95,39 @@ const useContact = () => {
     } catch (err) {
       setError(err);
       console.error("Error fetching conversation by ID: ", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addContact = async (phone, name) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (!phone) {
+        throw new Error("Phone is required");
+      }
+
+      const body = {
+        phone,
+        name,
+      };
+
+      const res = await fetchData({
+        method: "POST",
+        url: `${conf.apiBaseUrl}contacts`,
+        data: body,
+      });
+
+      // Refresh contacts after add
+      await getContactList();
+
+      return res;
+    } catch (err) {
+      setError(err);
+      console.error("Error adding contact: ", err);
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -118,6 +146,7 @@ const useContact = () => {
     setConversationById,
     setConversationList,
     loading,
+    addContact,
     error,
   };
 };

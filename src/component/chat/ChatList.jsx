@@ -5,7 +5,7 @@ import SearchInput from "../uiComponent/SearchInput";
 
 import Avatar from "../uiComponent/Avatar";
 import useContact from "../../hooks/contactHook/useContact";
-import { FaFileAlt, FaUserAlt } from "react-icons/fa";
+import { FaFileAlt, FaUser, FaUserAlt } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
 import { RiDeleteBin6Line, RiUnpinLine } from "react-icons/ri";
 import { BsPinAngle, BsThreeDotsVertical } from "react-icons/bs";
@@ -39,13 +39,16 @@ export default function ChatList() {
   const [groupIconFile, setGroupIconFile] = useState(null);
   const [groupIconPreview, setGroupIconPreview] = useState(null);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactName, setNewContactName] = useState("");
 
   const {
     getContactList,
     contactList,
     getConversationList,
     conversationList,
-    setConversationList, //
+    setConversationList,
+    addContact,
   } = useContact();
 
   const {
@@ -55,7 +58,7 @@ export default function ChatList() {
     deleteConversation,
     leaveGroup,
     pinnedConversation,
-    unpinnedConversation 
+    unpinnedConversation,
   } = useConversation();
 
   useEffect(() => {
@@ -64,8 +67,8 @@ export default function ChatList() {
 
   const { conversationId: activeConversationId } = useParams();
   // CURRENT USER
- const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-const currentUserId = storedUser?.id;
+  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const currentUserId = storedUser?.id;
 
   const filterByNameOrNumber = (list = []) => {
     if (!Array.isArray(list)) return [];
@@ -81,9 +84,8 @@ const currentUserId = storedUser?.id;
 
   console.log("conversation", conversationList);
 
-const filteredMatches = filterByNameOrNumber(contactList?.matches || []);
-const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
-
+  const filteredMatches = filterByNameOrNumber(contactList?.matches || []);
+  const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
 
   console.log("matches", contactList?.matches);
 
@@ -128,7 +130,7 @@ const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
     longPressTimer.current = setTimeout(() => {
       setSelectedConversationId(conversationId);
       setContextMenu({ visible: false, x: 0, y: 0, conversationId });
- // don't show floating menu on mobile
+      // don't show floating menu on mobile
     }, 600);
   };
   const handleTouchEnd = () => clearTimeout(longPressTimer.current);
@@ -136,9 +138,7 @@ const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
   // ✅ Context Menu / Header Action Handler
   const handleMenuAction = async (action) => {
     const targetId = contextMenu.conversationId || selectedConversationId;
-    const targetConversation = conversationList?.find(
-    (c) => c.id === targetId
-  );
+    const targetConversation = conversationList?.find((c) => c.id === targetId);
 
     if (!targetId) return;
 
@@ -151,27 +151,28 @@ const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
           break;
         }
         case "pin": {
-        const isPinned = targetConversation?.pinned || targetConversation?.isPinned;
+          const isPinned =
+            targetConversation?.pinned || targetConversation?.isPinned;
 
-        if (isPinned) {
-          await unpinnedConversation(targetId);
-        } else {
-          await pinnedConversation(targetId);
+          if (isPinned) {
+            await unpinnedConversation(targetId);
+          } else {
+            await pinnedConversation(targetId);
+          }
+
+          await getConversationList();
+          break;
         }
 
-        await getConversationList();
-        break;
-      }
-          
         case "delete":
           await deleteConversation(targetId);
           await getConversationList();
-          navigate(`/chats`)
+          navigate(`/chats`);
           break;
         case "leave":
           await leaveGroup(targetId);
           await getConversationList();
-          navigate(`/chats`)
+          navigate(`/chats`);
           break;
         default:
           break;
@@ -193,7 +194,9 @@ const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
       // DIRECT CHAT SEARCH
       // -------------------------------
       if (conversation.type === "DIRECT") {
-       const otherUser = (conversation.participants || []).find((p) => p.id !== currentUserId);
+        const otherUser = (conversation.participants || []).find(
+          (p) => p.id !== currentUserId
+        );
 
         const name = otherUser?.name?.toLowerCase() || "";
         const number = otherUser?.phoneNumber || "";
@@ -210,16 +213,16 @@ const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
       }
 
       return false;
-    }).sort((a, b) => {
-    const aPinned = a.pinned ? 1 : 0;
-    const bPinned = b.pinned ? 1 : 0;
+    })
+    .sort((a, b) => {
+      const aPinned = a.pinned ? 1 : 0;
+      const bPinned = b.pinned ? 1 : 0;
 
-    if (aPinned !== bPinned) return bPinned - aPinned; // pinned first
+      if (aPinned !== bPinned) return bPinned - aPinned; // pinned first
 
-    // fallback to latest message time
-    return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0);
-
-  });
+      // fallback to latest message time
+      return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0);
+    });
 
   const handleContactClick = async (participantId) => {
     try {
@@ -312,6 +315,18 @@ const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
     }
   };
 
+  const handleAddContact = async () => {
+    try {
+      await addContact(newContactPhone.trim(), newContactName.trim());
+      setNewContactPhone("");
+      setNewContactName("");
+      setNewChatScreen("HOME");
+      getContactList();
+    } catch (err) {
+      console.error("Failed to add contact", err);
+    }
+  };
+
   const handleCreateGroup = async () => {
     const participantIds = selectedGroupContacts.map((c) => c.userId);
 
@@ -348,11 +363,10 @@ const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
     }
   };
 
-
-// safe: handle null/undefined
-const contextConversation = (conversationList || []).find(
-  (c) => c.id === contextMenu.conversationId
-);
+  // safe: handle null/undefined
+  const contextConversation = (conversationList || []).find(
+    (c) => c.id === contextMenu.conversationId
+  );
 
   return (
     <div className="w-full flex flex-col h-full bg-card overflow-hidden">
@@ -389,8 +403,9 @@ const contextConversation = (conversationList || []).find(
             {selectedConversationId ? (
               <>
                 <button onClick={() => handleMenuAction("pin")}>
-                  {(conversationList || []).find((c) => c.id === selectedConversationId)
-                    ?.isPinned ? (
+                  {(conversationList || []).find(
+                    (c) => c.id === selectedConversationId
+                  )?.isPinned ? (
                     <IconButton
                       icon={RiUnpinLine}
                       variant="normal"
@@ -503,7 +518,7 @@ const contextConversation = (conversationList || []).find(
 
             // Get current logged in user
             const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-const currentUserId = storedUser?.id;
+            const currentUserId = storedUser?.id;
 
             const formatLastMessage = () => {
               const text = conversation.lastMessage || "";
@@ -572,8 +587,8 @@ const currentUserId = storedUser?.id;
             // ----------------------------
             if (conversation.type === "DIRECT") {
               const otherUser = (conversation.participants || []).find(
-    (p) => p.id !== currentUserId
-  );
+                (p) => p.id !== currentUserId
+              );
               displayName = otherUser?.name;
               displayImage = otherUser?.profileImage;
             }
@@ -612,8 +627,8 @@ const currentUserId = storedUser?.id;
                     <h3 className="font-medium text-sm truncate flex items-center gap-1.5">
                       {displayName}
                       {conversation.pinned && (
-              <LuPin className="w-3.5 h-3.5 text-muted-foreground" />
-            )}
+                        <LuPin className="w-3.5 h-3.5 text-muted-foreground" />
+                      )}
                       {/* {chat.archived && (
               <div className="bg-primary text-white text-[10px] px-1 rounded-[2px]">
                 archived
@@ -621,14 +636,15 @@ const currentUserId = storedUser?.id;
             )} */}
                     </h3>
                     <span className="text-xs text-muted-foreground">
-  {conversation.lastMessageAt
-    ? new Date(conversation.lastMessageAt).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : ""}
-</span>
-
+                      {conversation.lastMessageAt
+                        ? new Date(
+                            conversation.lastMessageAt
+                          ).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </span>
                   </div>
 
                   <div className="flex justify-between items-center ">
@@ -739,6 +755,23 @@ const currentUserId = storedUser?.id;
 
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium">New group</h3>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-4 py-3 hover:bg-muted/50 cursor-pointer">
+                    <div
+                      className="flex items-center gap-3"
+                      onClick={() => {
+                        setNewChatScreen("NEW_CONTACT");
+                        // setSelectedGroupContacts([]);
+                        // setSearchContact("");
+                      }}
+                    >
+                      <Avatar src={<FaUser />} alt="New Contact" size="md" />
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium">New contact</h3>
                       </div>
                     </div>
                   </div>
@@ -1039,6 +1072,128 @@ const currentUserId = storedUser?.id;
                   </div>
                 </div>
               )}
+
+              {newChatScreen === "NEW_CONTACT" && (
+                <div className="absolute inset-0 flex flex-col bg-card animate-[slideIn_0.2s_ease-out]">
+                  <div className="flex flex-col gap-2 px-4 py-4 border-b ">
+                    <div className="flex items-center gap-2">
+                      <IconButton
+                        icon={IoMdArrowBack}
+                        variant="ghost"
+                        ariaLabel="Back"
+                        onClick={() => setNewChatScreen("HOME")}
+                      />
+                      <span className="text-xl font-heading font-bold">
+                        New contact{" "}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="w-full flex-1 overflow-y-auto px-4 py-4 flex flex-col items-center gap-4">
+                    <Avatar src={<FaUser />} alt="New Contact" size="xl" />
+                    {/* Group icon */}
+
+                    {/* Group name */}
+                    <div className="w-full flex flex-col gap-1">
+                      <span className="text-sm text-muted-foreground">
+                        Phone Number
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="tel"
+                        className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Phone Number"
+                        value={newContactPhone}
+                        onChange={(e) => setNewContactPhone(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="w-full flex flex-col gap-1">
+                      <span className="text-sm text-muted-foreground">
+                        Name
+                      </span>
+                      <input
+                        type="text"
+                        className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Name"
+                        value={newContactName}
+                        onChange={(e) => setNewContactName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer buttons */}
+                  <div className="px-4 py-3 border-t flex gap-2">
+                    <button
+                      className="flex-1 h-9 rounded-md bg-primary text-card text-sm font-medium disabled:opacity-50"
+                      onClick={handleAddContact}
+                    >
+                      Add
+                    </button>
+                    <button
+                      className="flex-1 h-9 rounded-md border text-sm font-medium"
+                      onClick={() => {
+                        setOpenContactList(false);
+                        setNewChatScreen("HOME");
+                        setNewContactPhone("");
+                        setNewContactName("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* {newChatScreen === "NEW_CONTACT" && (
+
+                <div className="px-4 py-3 border-t">
+                   <div className="flex flex-col items-center gap-2">
+                     <input
+      type="text"
+      inputMode="tel"
+      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none"
+      placeholder="Phone (with country code)"
+      value={newContactPhone}
+      onChange={(e) => setNewContactPhone(e.target.value)}
+    />
+      <input
+      type="text"
+      className="w-40 rounded-lg border bg-background px-3 py-2 text-sm outline-none"
+      placeholder="Name (optional)"
+      value={newContactName}
+      onChange={(e) => setNewContactName(e.target.value)}
+    />
+    <button
+      className="ml-2 h-9 px-3 rounded-md bg-primary text-card text-sm font-medium disabled:opacity-50"
+      onClick={async (e) => {
+        e.stopPropagation();
+        if (!newContactPhone.trim()) {
+          // optionally show UI feedback/toast
+          console.error("Phone required");
+          return;
+        }
+        try {
+          await addContact(newContactPhone.trim(), newContactName.trim());
+          // clear inputs
+          setNewContactPhone("");
+          setNewContactName("");
+          // ensure contact list is reloaded (addContact already calls getContactList, but safe to call again)
+          getContactList();
+        } catch (err) {
+          // show toast or console
+          console.error("Failed to add contact", err);
+        }
+      }}
+    >
+      Add
+    </button>
+
+                   </div>
+                </div>
+                
+              )} */}
             </div>
           </div>
         </div>
@@ -1046,62 +1201,58 @@ const currentUserId = storedUser?.id;
 
       {/* ✅ Desktop Context Menu */}
       {contextMenu.visible && (
-  <div
-    className="hidden md:block context-menu absolute bg-white rounded-xl shadow-lg border w-44 py-2"
-    style={{ top: contextMenu.y, left: contextMenu.x, zIndex: 9 }}
-  >
-    {/* PIN / UNPIN (common for both) */}
-    <button
-      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-      onClick={() => handleMenuAction("pin")}
-    >
-      {contextConversation?.pinned ? (
-        <div className="flex items-center gap-1">
-          <RiUnpinLine className="w-5 h-5" /> Unpin Chat
-        </div>
-      ) : (
-        <div className="flex items-center gap-1">
-          <BsPinAngle className="w-5 h-5" /> Pin Chat
+        <div
+          className="hidden md:block context-menu absolute bg-white rounded-xl shadow-lg border w-44 py-2"
+          style={{ top: contextMenu.y, left: contextMenu.x, zIndex: 9 }}
+        >
+          {/* PIN / UNPIN (common for both) */}
+          <button
+            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+            onClick={() => handleMenuAction("pin")}
+          >
+            {contextConversation?.pinned ? (
+              <div className="flex items-center gap-1">
+                <RiUnpinLine className="w-5 h-5" /> Unpin Chat
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <BsPinAngle className="w-5 h-5" /> Pin Chat
+              </div>
+            )}
+          </button>
+
+          {/* ARCHIVE (common for both) */}
+          <button
+            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+            onClick={() => handleMenuAction("archive")}
+          >
+            <div className="flex items-center gap-1">
+              <LuArchive className="w-5 h-5" /> Archive Chat
+            </div>
+          </button>
+
+          <button
+            className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
+            onClick={() => handleMenuAction("delete")}
+          >
+            <div className="flex items-center gap-1">
+              <RiDeleteBin6Line className="w-5 h-5" /> Delete Chat
+            </div>
+          </button>
+
+          {/* 🚪 EXIT GROUP → sirf GROUP ke liye */}
+          {contextConversation?.type === "GROUP" && (
+            <button
+              className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
+              onClick={() => handleMenuAction("leave")}
+            >
+              <div className="flex items-center gap-1">
+                <RiDeleteBin6Line className="w-5 h-5" /> Exit Group
+              </div>
+            </button>
+          )}
         </div>
       )}
-    </button>
-
-    {/* ARCHIVE (common for both) */}
-    <button
-      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-      onClick={() => handleMenuAction("archive")}
-    >
-      <div className="flex items-center gap-1">
-        <LuArchive className="w-5 h-5" /> Archive Chat
-      </div>
-    </button>
-
-
-   
-      <button
-        className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
-        onClick={() => handleMenuAction("delete")}
-      >
-        <div className="flex items-center gap-1">
-          <RiDeleteBin6Line className="w-5 h-5" /> Delete Chat
-        </div>
-      </button>
-
-
-    {/* 🚪 EXIT GROUP → sirf GROUP ke liye */}
-    {contextConversation?.type === "GROUP" && (
-      <button
-        className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
-        onClick={() => handleMenuAction("leave")}
-      >
-        <div className="flex items-center gap-1">
-          <RiDeleteBin6Line className="w-5 h-5" /> Exit Group
-        </div>
-      </button>
-    )}
-  </div>
-)}
-
     </div>
   );
 }

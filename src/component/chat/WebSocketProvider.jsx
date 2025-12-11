@@ -1,5 +1,11 @@
 // src/websocket/WebSocketProvider.jsx
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import useContact from "../../hooks/contactHook/useContact";
@@ -17,7 +23,8 @@ export const WebSocketProvider = ({ children }) => {
   const [connected, setConnected] = useState(false);
   const subscriptionsRef = useRef({}); // { [destination]: subscription }
 
-  const { conversationList, getConversationList, setConversationList } = useContact();
+  const { conversationList, getConversationList, setConversationList } =
+    useContact();
   const { acknowledgeDelivered, syncDelivered } = useMessage();
 
   // 1) Fetch conversation list once (or you can skip if already fetched elsewhere)
@@ -93,7 +100,9 @@ export const WebSocketProvider = ({ children }) => {
     return () => {
       console.log("🧹 Cleaning up global WS");
       setConnected(false);
-      Object.values(subscriptionsRef.current).forEach((sub) => sub.unsubscribe());
+      Object.values(subscriptionsRef.current).forEach((sub) =>
+        sub.unsubscribe()
+      );
       subscriptionsRef.current = {};
       client.deactivate();
     };
@@ -195,7 +204,13 @@ export const WebSocketProvider = ({ children }) => {
 
       subscriptionsRef.current[destination] = subscription;
     });
-  }, [conversationList, connected, acknowledgeDelivered, setConversationList, getConversationList]);
+  }, [
+    conversationList,
+    connected,
+    acknowledgeDelivered,
+    setConversationList,
+    getConversationList,
+  ]);
 
   return (
     <WebSocketContext.Provider
