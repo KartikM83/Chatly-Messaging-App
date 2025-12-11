@@ -167,6 +167,111 @@ const syncDelivered = async () => {
 };
 
 
+const sendMediaMessage = async (conversationId, file, caption,onUploadProgress,explicitType ) => {
+    if (!file) return null;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+
+      const clientMessageId = crypto.randomUUID();
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("clientMessageId", clientMessageId);
+
+      if (caption) {
+        // 👇 adjust key name if your backend expects `caption` instead of `content`
+        formData.append("caption", caption);
+      }
+
+      let type = explicitType;
+      if (!type) {
+        const mime = file.type || "";
+        if (mime.startsWith("video/")) type = "VIDEO";
+        else if (mime.startsWith("audio/")) type = "AUDIO";
+        else type = "FILE"; // docs, images, etc.
+      }
+      formData.append("type", type);
+
+      const res = await fetchData({
+        method: "POST",
+        url: `${conf.apiBaseUrl}conversation/${conversationId}/messages/media`,
+        data: formData,
+        onUploadProgress: (event) => {
+            if (!onUploadProgress || !event.total) return;
+            const percent = Math.round((event.loaded * 100) / event.total);
+            onUploadProgress(percent); // 👈 update progress in UI
+          },
+      });
+
+      const data = res?.data || res;
+      return data;
+    } catch (err) {
+      setError(err);
+      console.error("Error sending media message:", err);
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  const deleteMessage = async (conversationId, messageId, scope = "ME") => {
+  try {
+    
+
+    await fetchData({
+      method: "DELETE",
+      url: `${conf.apiBaseUrl}conversation/${conversationId}/messages/${messageId}?scope=${scope}`,
+    });
+
+    console.log("Message delete successfully");
+  } catch (err) {
+    console.error("Message delete failed", err);
+  }
+};
+
+
+const editMessage = async (conversationId, messageId, content) => {
+  try {
+    const token = sessionStorage.getItem("token");
+
+    await fetchData({
+      method: "PUT",
+      url: `${conf.apiBaseUrl}conversation/${conversationId}/messages/${messageId}`,
+      data: { content },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("Message edited successfully");
+  } catch (err) {
+    console.error("Message edit failed", err);
+    throw err; // taaki upar handle kar sako
+  }
+};
+
+const reactToMessage = async (conversationId, messageId, reaction) => {
+  try {
+    const token = sessionStorage.getItem("token");
+
+    await fetchData({
+      method: "POST",
+      url: `${conf.apiBaseUrl}conversation/${conversationId}/messages/react`,
+      data: { messageId, reaction },
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("Message reaction sent");
+  } catch (err) {
+    console.error("Message reaction failed", err);
+  }
+};
 
 
 
@@ -181,6 +286,10 @@ const syncDelivered = async () => {
     markMessagesAsRead,
     acknowledgeDelivered,
     syncDelivered,
+    sendMediaMessage,
+    deleteMessage,  
+    editMessage,
+    reactToMessage,
     loading,
     error,
   };

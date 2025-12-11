@@ -1,20 +1,21 @@
-import { LuArchive, LuMessageSquarePlus } from "react-icons/lu";
+import { LuArchive, LuMessageSquarePlus, LuVideo } from "react-icons/lu";
 import IconButton from "../uiComponent/IconButton";
 
 import SearchInput from "../uiComponent/SearchInput";
 
 import Avatar from "../uiComponent/Avatar";
 import useContact from "../../hooks/contactHook/useContact";
-import { FaUserAlt } from "react-icons/fa";
+import { FaFileAlt, FaUserAlt } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
 import { RiDeleteBin6Line, RiUnpinLine } from "react-icons/ri";
 import { BsPinAngle, BsThreeDotsVertical } from "react-icons/bs";
-import { MdOutlinePhotoCamera } from "react-icons/md";
+import { MdInsertPhoto, MdOutlinePhotoCamera } from "react-icons/md";
 import useConversation from "../../hooks/conversationHook/useConversation";
 import { HiUsers } from "react-icons/hi";
 import { IoMdArrowBack } from "react-icons/io";
 import { FiCamera } from "react-icons/fi";
 import { useEffect, useRef, useState } from "react";
+import { FaHeadphones } from "react-icons/fa6";
 
 export default function ArchivedList() {
   const [openbox, setOpenbox] = useState(false);
@@ -289,6 +290,57 @@ export default function ArchivedList() {
             const storedUser = JSON.parse(localStorage.getItem("user"));
             const currentUserId = storedUser?.id;
 
+            const formatLastMessage = () => {
+              const text = conversation.lastMessage || "";
+              const type = (conversation.lastMessageType || "").toUpperCase();
+            
+              const getFileName = (url) => {
+              try {
+                const clean = url.split("?")[0];              // remove query params
+                const full = decodeURIComponent(clean.split("/").pop() || "");
+            
+                // If filename contains PREFIX_UUID_original-name
+                // Example → 1765120509672_94a5d8f4_ChatlyAPI.pdf
+                const parts = full.split("_");
+            
+                // The REAL name is everything after the 2 prefixes
+                // (timestamp + uuid)
+                if (parts.length >= 3) {
+                  return parts.slice(2).join("_");           // → "ChatlyAPI.pdf"
+                }
+            
+                return full;                                  // fallback
+              } catch {
+                return "file";
+              }
+            };
+            
+            
+              if (type === "TEXT") return text;
+            
+              if (type === "IMAGE" || /\.(jpg|jpeg|png|gif|webp)$/i.test(text))
+                return (
+              <span className="flex items-center gap-1">
+                <MdInsertPhoto size={15} /> Photo
+              </span>
+            )
+            
+              if (type === "VIDEO") return (<span className="flex items-center gap-1">
+                <LuVideo size={15} /> Video
+              </span>);
+              if (type === "AUDIO") return (<span className="flex items-center gap-1">
+                <FaHeadphones size={15} /> Audio
+              </span>);
+            
+              if (type === "FILE" || type === "DOCUMENT") return ( <span className="flex items-center gap-1">
+                <FaFileAlt size={15} /> {getFileName(conversation.lastMessage)}
+              </span>);
+            
+              // fallback if unknown
+              return "📎 Attachment";
+            };
+            
+
             let displayName = "";
             let displayImage = "";
 
@@ -359,9 +411,7 @@ export default function ArchivedList() {
 
                   <div className="flex justify-between items-center ">
                     <p className="text-sm w-40 text-muted-foreground truncate">
-                      {conversation.lastMessage
-                        ? conversation.lastMessage
-                        : "No messages yet"}
+                    {formatLastMessage()}
                     </p>
 
                     <div className="flex gap-2">
