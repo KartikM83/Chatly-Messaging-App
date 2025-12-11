@@ -33,16 +33,25 @@ function groupMessagesByDate(messages = []) {
     map.get(dateKey).push(msg);
   });
 
-  return Array.from(map.entries())
-    .map(([dateKey, msgs]) => ({
+return Array.from(map.entries())
+  .map(([dateKey, msgs]) => {
+    const ts = msgs[0]?.timestamp || 0;
+    const d = new Date(ts);
+    return {
       dateKey,
-      date: new Date(msgs[0].timestamp),
+      date: isNaN(d.getTime()) ? new Date(0) : d,
       messages: msgs,
-    }))
-    .sort((a, b) => a.date - b.date);
+    };
+  })
+  .sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
+
 }
 
 function formatDateLabel(date) {
+  if (!date || isNaN(date.getTime())) {
+    return new Date(date).toLocaleDateString?.() || "";
+  }
+
   const today = new Date();
   const yesterday = new Date();
   yesterday.setDate(today.getDate() - 1);
@@ -420,14 +429,16 @@ useEffect(() => {
     });
 
     client.subscribe(`/topic/conversations/${conversationId}/read`, (m) => {
-      const updated = JSON.parse(m.body);
-      setMessages((prev) => ({
-        ...prev,
-        messages: prev.messages.map(
-          (msg) => updated.find((u) => u.id === msg.id) || msg
-        ),
-      }));
-    });
+  const updated = JSON.parse(m.body);
+  setMessages((prev) => {
+    if (!prev || !Array.isArray(prev.messages)) return prev;
+    return {
+      ...prev,
+      messages: prev.messages.map((msg) => updated.find((u) => u.id === msg.id) || msg),
+    };
+  });
+});
+
   };
 
   client.activate();

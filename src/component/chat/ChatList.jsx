@@ -64,8 +64,8 @@ export default function ChatList() {
 
   const { conversationId: activeConversationId } = useParams();
   // CURRENT USER
-  const storedUser = JSON.parse(localStorage.getItem("user"));
-  const currentUserId = storedUser?.id;
+ const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+const currentUserId = storedUser?.id;
 
   const filterByNameOrNumber = (list = []) => {
     if (!Array.isArray(list)) return [];
@@ -81,8 +81,9 @@ export default function ChatList() {
 
   console.log("conversation", conversationList);
 
-  const filteredMatches = filterByNameOrNumber(contactList?.matches || "");
-  const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || "");
+const filteredMatches = filterByNameOrNumber(contactList?.matches || []);
+const filteredUnmatches = filterByNameOrNumber(contactList?.unmatches || []);
+
 
   console.log("matches", contactList?.matches);
 
@@ -126,7 +127,8 @@ export default function ChatList() {
   const handleTouchStart = (conversationId) => {
     longPressTimer.current = setTimeout(() => {
       setSelectedConversationId(conversationId);
-      setContextMenu({ visible: false, conversationId }); // don't show floating menu on mobile
+      setContextMenu({ visible: false, x: 0, y: 0, conversationId });
+ // don't show floating menu on mobile
     }, 600);
   };
   const handleTouchEnd = () => clearTimeout(longPressTimer.current);
@@ -191,9 +193,8 @@ export default function ChatList() {
       // DIRECT CHAT SEARCH
       // -------------------------------
       if (conversation.type === "DIRECT") {
-        const otherUser = conversation.participants?.find(
-          (p) => p.id !== currentUserId
-        );
+       const otherUser = (conversation.participants || []).find((p) => p.id !== currentUserId);
+
         const name = otherUser?.name?.toLowerCase() || "";
         const number = otherUser?.phoneNumber || "";
 
@@ -216,7 +217,8 @@ export default function ChatList() {
     if (aPinned !== bPinned) return bPinned - aPinned; // pinned first
 
     // fallback to latest message time
-    return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+    return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0);
+
   });
 
   const handleContactClick = async (participantId) => {
@@ -347,7 +349,8 @@ export default function ChatList() {
   };
 
 
-  const contextConversation = conversationList.find(
+// safe: handle null/undefined
+const contextConversation = (conversationList || []).find(
   (c) => c.id === contextMenu.conversationId
 );
 
@@ -386,7 +389,7 @@ export default function ChatList() {
             {selectedConversationId ? (
               <>
                 <button onClick={() => handleMenuAction("pin")}>
-                  {conversationList.find((c) => c.id === selectedConversationId)
+                  {(conversationList || []).find((c) => c.id === selectedConversationId)
                     ?.isPinned ? (
                     <IconButton
                       icon={RiUnpinLine}
@@ -499,8 +502,8 @@ export default function ChatList() {
             if (!conversation) return null;
 
             // Get current logged in user
-            const storedUser = JSON.parse(localStorage.getItem("user"));
-            const currentUserId = storedUser?.id;
+            const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+const currentUserId = storedUser?.id;
 
             const formatLastMessage = () => {
               const text = conversation.lastMessage || "";
@@ -568,10 +571,9 @@ export default function ChatList() {
             //   CASE 1: DIRECT CHAT
             // ----------------------------
             if (conversation.type === "DIRECT") {
-              const otherUser = conversation.participants.find(
-                (p) => p.id !== currentUserId
-              );
-
+              const otherUser = (conversation.participants || []).find(
+    (p) => p.id !== currentUserId
+  );
               displayName = otherUser?.name;
               displayImage = otherUser?.profileImage;
             }
@@ -619,14 +621,14 @@ export default function ChatList() {
             )} */}
                     </h3>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(conversation.lastMessageAt).toLocaleTimeString(
-                        [],
-                        {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }
-                      )}
-                    </span>
+  {conversation.lastMessageAt
+    ? new Date(conversation.lastMessageAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : ""}
+</span>
+
                   </div>
 
                   <div className="flex justify-between items-center ">
