@@ -2,7 +2,7 @@ import axios from "axios";
 import { useCallback } from "react";
 
 function useFetch() {
-  const fetchData = useCallback(async ({ method, url, data, params }) => {
+  const fetchData = useCallback(async ({ method, url, data, params,onUploadProgress  }) => {
     try {
       const token = sessionStorage.getItem("token");
 
@@ -17,6 +17,7 @@ function useFetch() {
             "Content-Type": "multipart/form-data",
           }),
         },
+         ...(onUploadProgress && { onUploadProgress }),
       };
 
       const result = await axios(axiosConfig);

@@ -4,8 +4,6 @@ import SockJS from "sockjs-client";
 import { Client } from "@stomp/stompjs";
 import useContact from "../../hooks/contactHook/useContact";
 import { useMessage } from "../../hooks/messageHook/useMessage";
-// import useContact from "../hooks/contactHook/useContact";
-// import { useMessage } from "../hooks/messageHook/useMessage";
 
 const WebSocketContext = createContext({
   client: null,
@@ -20,7 +18,7 @@ export const WebSocketProvider = ({ children }) => {
   const subscriptionsRef = useRef({}); // { [destination]: subscription }
 
   const { conversationList, getConversationList, setConversationList } = useContact();
-  const { acknowledgeDelivered,syncDelivered  } = useMessage();
+  const { acknowledgeDelivered, syncDelivered } = useMessage();
 
   // 1) Fetch conversation list once (or you can skip if already fetched elsewhere)
   useEffect(() => {
@@ -29,59 +27,56 @@ export const WebSocketProvider = ({ children }) => {
 
   // 2) Setup WS client once
   useEffect(() => {
-
     const apiBase = import.meta.env.VITE_API_BASE_URL || "";
-    // Remove trailing slash if any and append ws endpoint
-  const wsUrl = apiBase.replace(/\/+$/, "") + "/ws-chat";
+    const wsUrl = apiBase.replace(/\/+$/, "") + "/ws-chat";
     const socket = new SockJS(wsUrl);
 
     const client = new Client({
-      webSocketFactory: () => socket, 
-      reconnectDelay: 5000, // auto-reconnect
+      webSocketFactory: () => socket,
+      reconnectDelay: 5000,
       debug: (str) => console.log("[STOMP]", str),
     });
 
     client.onConnect = () => {
-  console.log("✅ Global WebSocket connected");
-  setConnected(true);
+      console.log("✅ Global WebSocket connected");
+      setConnected(true);
 
-  console.log("[WS] Connected, syncing delivered messages...");
-  syncDelivered();
+      console.log("[WS] Connected, syncing delivered messages...");
+      syncDelivered();
 
-  // ⭐ Subscribe to "conversation events" for this user
-  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-  const currentUserId = storedUser?.id;
+      // ⭐ Subscribe to "conversation events" for this user
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      const currentUserId = storedUser?.id;
 
-  if (currentUserId) {
-    const destination = `/topic/users/${currentUserId}/conversations`;
-    console.log("🔔 Subscribing to user conversation topic:", destination);
+      if (currentUserId) {
+        const destination = `/topic/users/${currentUserId}/conversations`;
+        console.log("🔔 Subscribing to user conversation topic:", destination);
 
-    const sub = client.subscribe(destination, (message) => {
-      const data = JSON.parse(message.body);
-      console.log("🌍 New/updated conversation via WS:", data);
+        const sub = client.subscribe(destination, (message) => {
+          const data = JSON.parse(message.body);
+          console.log("🌍 New/updated conversation via WS:", data);
 
-      // data is ConversationResponseDTO from backend
-      setConversationList((prev) => {
-        const conv = data;
-        if (!conv || !conv.id) return prev;
+          // data is ConversationResponseDTO from backend
+          setConversationList((prev) => {
+            const conv = data;
+            if (!conv || !conv.id) return prev;
 
-        if (!Array.isArray(prev) || prev.length === 0) {
-          return [conv];
-        }
+            if (!Array.isArray(prev) || prev.length === 0) {
+              return [conv];
+            }
 
-        // remove existing instance if any (no duplicates)
-        const without = prev.filter((c) => c && c.id !== conv.id);
+            // remove existing instance if any (no duplicates)
+            const without = prev.filter((c) => c && c.id !== conv.id);
 
-        // put new/updated conversation at top
-        return [conv, ...without];
-      });
-    });
+            // put new/updated conversation at top
+            return [conv, ...without];
+          });
+        });
 
-    // store subscription so we can clean up if needed
-    subscriptionsRef.current[destination] = sub;
-  }
-};
-
+        // store subscription so we can clean up if needed
+        subscriptionsRef.current[destination] = sub;
+      }
+    };
 
     client.onStompError = (frame) => {
       console.error("❌ STOMP error", frame.headers["message"], frame.body);
@@ -104,17 +99,6 @@ export const WebSocketProvider = ({ children }) => {
     };
   }, []);
 
-
-  // After onConnect sets `connected` to true
-// useEffect(() => {
-//   if (!connected) return;
-
-//   // As soon as WS is up, ask backend to sync all SENT -> DELIVERED for this user
-//   console.log("[WS] Connected, syncing delivered messages...");
-//   syncDelivered();
-// }, [connected, syncDelivered]);
-
-
   // 3) Subscribe to ALL conversation topics when we know them
   useEffect(() => {
     const client = clientRef.current;
@@ -136,9 +120,40 @@ export const WebSocketProvider = ({ children }) => {
 
       console.log("🔔 Global subscribe:", destination);
 
-      const subscription = client.subscribe(destination, (message) => {
+      const subscription = client.subscribe(destination, async (message) => {
         const data = JSON.parse(message.body);
         console.log("🌍 Global WS event from", destination, data);
+
+        // ✅ Handle MESSAGE_DELETE events globally
+        if (data.event === "MESSAGE_DELETE") {
+          const { messageId, scope, deletedAt } = data.data || {};
+
+          if (scope === "EVERYONE") {
+            console.log("🗑️ Global delete for everyone detected:", messageId);
+
+            // Refetch conversation list to update lastMessage for ALL users
+            await getConversationList();
+          }
+
+          if (scope === "ME") {
+            console.log("🗑️ Global delete for me detected:", messageId);
+            // Still refetch to ensure consistency
+            await getConversationList();
+          }
+
+          return;
+        }
+
+        // ✅ Handle MESSAGE_EDIT events globally
+        if (data.event === "MESSAGE_EDIT") {
+          const { id, content } = data.data || {};
+
+          console.log("✏️ Global edit detected:", id);
+
+          // Refetch conversation list to update lastMessage if it was edited
+          await getConversationList();
+          return;
+        }
 
         // -----------------------------
         // 1. ACK-only events (no content)
@@ -180,7 +195,7 @@ export const WebSocketProvider = ({ children }) => {
 
       subscriptionsRef.current[destination] = subscription;
     });
-  }, [conversationList, connected, acknowledgeDelivered, setConversationList]);
+  }, [conversationList, connected, acknowledgeDelivered, setConversationList, getConversationList]);
 
   return (
     <WebSocketContext.Provider

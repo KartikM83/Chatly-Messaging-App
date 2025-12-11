@@ -141,6 +141,52 @@ const useConversation = () => {
     }   
   };
 
+
+  const pinnedConversation = async (conversationId) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchData({
+        method:"POST",
+        url: `${conf.apiBaseUrl}conversations/${conversationId}/pinned`,
+      });
+      console.log("pinned conversation response: ", res);
+      setConversation(res);
+      return res;
+    } catch (err) {
+      setError(err);
+      console.error("Error pinned conversation: ", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }   
+  };
+  
+    const unpinnedConversation = async (conversationId) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchData({
+        method:"POST",
+        url: `${conf.apiBaseUrl}conversations/${conversationId}/unpinned`,
+      });
+      console.log("unpinned conversation response: ", res);
+      setConversation(res);
+      return res;
+    } catch (err) {
+      setError(err);
+      console.error("Error unpinned conversation: ", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }   
+  };
+
+
+
+
+
+
   const deleteConversation = async (conversationId) => {
     setLoading(true);
     setError(null);
@@ -161,6 +207,35 @@ const useConversation = () => {
     }   
   };
 
+const leaveGroup = async (conversationId) => {
+  setLoading(true);
+  setError(null);
+  try {
+    const res = await fetchData({
+      method: "POST",
+      url: `${conf.apiBaseUrl}conversations/${conversationId}/leave`,
+    });
+    console.log("leave conversation response: ", res);
+
+    // agar currently open conversation ye hi hai to null karo
+    setConversation((prev) =>
+      prev && prev.id === conversationId ? null : prev
+    );
+
+    return res; // string message / whatever
+  } catch (err) {
+    setError(err);
+    console.error("Error leave conversation: ", err);
+    throw err;
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+
+
 
   return {
     loading,
@@ -171,7 +246,10 @@ const useConversation = () => {
     archiveConversation,
     setConversation,
     unarchiveConversation,
-    deleteConversation
+    deleteConversation,
+    leaveGroup,
+    pinnedConversation,
+    unpinnedConversation   
   };
 };
 

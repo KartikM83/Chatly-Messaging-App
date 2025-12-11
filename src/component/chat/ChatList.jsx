@@ -1,19 +1,20 @@
-import { LuArchive, LuMessageSquarePlus } from "react-icons/lu";
+import { LuArchive, LuMessageSquarePlus, LuPin, LuVideo } from "react-icons/lu";
 import IconButton from "../uiComponent/IconButton";
 import { useEffect, useRef, useState } from "react";
 import SearchInput from "../uiComponent/SearchInput";
 
 import Avatar from "../uiComponent/Avatar";
 import useContact from "../../hooks/contactHook/useContact";
-import { FaUserAlt } from "react-icons/fa";
+import { FaFileAlt, FaUserAlt } from "react-icons/fa";
 import { useNavigate, useParams } from "react-router-dom";
 import { RiDeleteBin6Line, RiUnpinLine } from "react-icons/ri";
 import { BsPinAngle, BsThreeDotsVertical } from "react-icons/bs";
-import { MdOutlinePhotoCamera } from "react-icons/md";
+import { MdInsertPhoto, MdOutlinePhotoCamera } from "react-icons/md";
 import useConversation from "../../hooks/conversationHook/useConversation";
 import { HiUsers } from "react-icons/hi";
 import { IoMdArrowBack } from "react-icons/io";
 import { FiCamera } from "react-icons/fi";
+import { FaHeadphones } from "react-icons/fa6";
 
 export default function ChatList() {
   const [openContactList, setOpenContactList] = useState(false);
@@ -52,6 +53,9 @@ export default function ChatList() {
     createGroupConversation,
     archiveConversation,
     deleteConversation,
+    leaveGroup,
+    pinnedConversation,
+    unpinnedConversation 
   } = useConversation();
 
   useEffect(() => {
@@ -59,9 +63,9 @@ export default function ChatList() {
   }, []);
 
   const { conversationId: activeConversationId } = useParams();
-    // CURRENT USER
-      const storedUser = JSON.parse(localStorage.getItem("user"));
-      const currentUserId = storedUser?.id;
+  // CURRENT USER
+  const storedUser = JSON.parse(localStorage.getItem("user"));
+  const currentUserId = storedUser?.id;
 
   const filterByNameOrNumber = (list = []) => {
     if (!Array.isArray(list)) return [];
@@ -130,6 +134,10 @@ export default function ChatList() {
   // ✅ Context Menu / Header Action Handler
   const handleMenuAction = async (action) => {
     const targetId = contextMenu.conversationId || selectedConversationId;
+    const targetConversation = conversationList?.find(
+    (c) => c.id === targetId
+  );
+
     if (!targetId) return;
 
     try {
@@ -140,12 +148,28 @@ export default function ChatList() {
           await getConversationList();
           break;
         }
-        case "pin":
-          // await pinUnpinConversation(targetId);
-          break;
+        case "pin": {
+        const isPinned = targetConversation?.pinned || targetConversation?.isPinned;
+
+        if (isPinned) {
+          await unpinnedConversation(targetId);
+        } else {
+          await pinnedConversation(targetId);
+        }
+
+        await getConversationList();
+        break;
+      }
+          
         case "delete":
           await deleteConversation(targetId);
           await getConversationList();
+          navigate(`/chats`)
+          break;
+        case "leave":
+          await leaveGroup(targetId);
+          await getConversationList();
+          navigate(`/chats`)
           break;
         default:
           break;
@@ -162,8 +186,6 @@ export default function ChatList() {
     .filter((conversation) => !conversation.archived)
     .filter((conversation) => {
       const query = searchQuery.toLowerCase();
-
-    
 
       // -------------------------------
       // DIRECT CHAT SEARCH
@@ -187,7 +209,15 @@ export default function ChatList() {
       }
 
       return false;
-    });
+    }).sort((a, b) => {
+    const aPinned = a.pinned ? 1 : 0;
+    const bPinned = b.pinned ? 1 : 0;
+
+    if (aPinned !== bPinned) return bPinned - aPinned; // pinned first
+
+    // fallback to latest message time
+    return new Date(b.lastMessageAt) - new Date(a.lastMessageAt);
+  });
 
   const handleContactClick = async (participantId) => {
     try {
@@ -316,6 +346,11 @@ export default function ChatList() {
     }
   };
 
+
+  const contextConversation = conversationList.find(
+  (c) => c.id === contextMenu.conversationId
+);
+
   return (
     <div className="w-full flex flex-col h-full bg-card overflow-hidden">
       <div className="p-2 border-b ">
@@ -439,8 +474,7 @@ export default function ChatList() {
             </span>
             <span
               className="px-3 py-2 hover:bg-gray-100 cursor-pointer transition"
-            onClick={() => navigate("/settings")}
-
+              onClick={() => navigate("/settings")}
             >
               {" "}
               Settings{" "}
@@ -467,6 +501,65 @@ export default function ChatList() {
             // Get current logged in user
             const storedUser = JSON.parse(localStorage.getItem("user"));
             const currentUserId = storedUser?.id;
+
+            const formatLastMessage = () => {
+              const text = conversation.lastMessage || "";
+              const type = (conversation.lastMessageType || "").toUpperCase();
+
+              const getFileName = (url) => {
+                try {
+                  const clean = url.split("?")[0]; // remove query params
+                  const full = decodeURIComponent(clean.split("/").pop() || "");
+
+                  // If filename contains PREFIX_UUID_original-name
+                  // Example → 1765120509672_94a5d8f4_ChatlyAPI.pdf
+                  const parts = full.split("_");
+
+                  // The REAL name is everything after the 2 prefixes
+                  // (timestamp + uuid)
+                  if (parts.length >= 3) {
+                    return parts.slice(2).join("_"); // → "ChatlyAPI.pdf"
+                  }
+
+                  return full; // fallback
+                } catch {
+                  return "file";
+                }
+              };
+
+              if (type === "TEXT") return text;
+
+              if (type === "IMAGE" || /\.(jpg|jpeg|png|gif|webp)$/i.test(text))
+                return (
+                  <span className="flex items-center gap-1">
+                    <MdInsertPhoto size={15} /> Photo
+                  </span>
+                );
+
+              if (type === "VIDEO")
+                return (
+                  <span className="flex items-center gap-1">
+                    <LuVideo size={15} /> Video
+                  </span>
+                );
+              if (type === "AUDIO")
+                return (
+                  <span className="flex items-center gap-1">
+                    <FaHeadphones size={15} /> Audio
+                  </span>
+                );
+
+              if (type === "FILE" || type === "DOCUMENT")
+                return (
+                  <span className="flex items-center gap-1">
+                    <FaFileAlt size={15} />{" "}
+                    {getFileName(conversation.lastMessage)}
+                  </span>
+                );
+
+              // fallback if unknown
+              return "";
+            };
 
             let displayName = "";
             let displayImage = "";
@@ -516,9 +609,9 @@ export default function ChatList() {
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="font-medium text-sm truncate flex items-center gap-1.5">
                       {displayName}
-                      {/* {chat.isPinned && (
+                      {conversation.pinned && (
               <LuPin className="w-3.5 h-3.5 text-muted-foreground" />
-            )} */}
+            )}
                       {/* {chat.archived && (
               <div className="bg-primary text-white text-[10px] px-1 rounded-[2px]">
                 archived
@@ -538,10 +631,7 @@ export default function ChatList() {
 
                   <div className="flex justify-between items-center ">
                     <p className="flex-1 w-40 text-sm text-muted-foreground truncate">
-
-                      {conversation.lastMessage
-                        ? conversation.lastMessage
-                        : "No messages yet"}
+                      {formatLastMessage()}
                     </p>
                     {conversation.unreadCount === 0 ? (
                       ""
@@ -581,84 +671,183 @@ export default function ChatList() {
       </div>
 
       {openContactList && (
-
-         <div
-    className="
+        <div
+          className="
       fixed inset-0 z-[1000]
       flex justify-center items-end md:items-start
       bg-black/40 md:bg-transparent
-       md:pointer-events-none
+    
     "
-  >
-                <div
-      ref={contactListRef}
-      className="
+          onClick={() => {
+            setOpenContactList(false);
+          }}
+        >
+          <div
+            ref={contactListRef}
+            className="
         w-full h-[100%] bg-card shadow-lg overflow-hidden
-       
         md:rounded-[8px] md:w-[330px] md:h-[500px]
         md:absolute md:top-[109px] md:left-[370px]
-         pointer-events-auto
+           pointer-events-auto
+   
       "
-    >
-                <div className="relative w-full h-full">
-                  {/* ======================
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative w-full h-full">
+              {/* ======================
           SCREEN 1: NEW CHAT
           ====================== */}
-                  <div
-                    className={`absolute inset-0 flex flex-col transition-transform duration-200
+              <div
+                className={`absolute inset-0 flex flex-col transition-transform duration-200
         ${newChatScreen === "HOME" ? "translate-x-0" : "-translate-x-full"}`}
-                  >
-                    <div className="flex flex-col gap-2 px-4 py-4 border-b">
-                      <div className="flex items-center gap-2">
-                         <IconButton
-                                  icon={IoMdArrowBack}
-                                  variant="ghost"
-                                  onClick={()=> setOpenContactList(false)}
-                                  ariaLabel="Back"
-                                  className="md:hidden"
-                                />
-                                <span className="text-xl font-heading font-bold">
-                        New chat
-                      </span>
+              >
+                <div className="flex flex-col gap-2 px-4 py-4 border-b">
+                  <div className="flex items-center gap-2">
+                    <IconButton
+                      icon={IoMdArrowBack}
+                      variant="ghost"
+                      onClick={() => setOpenContactList(false)}
+                      ariaLabel="Back"
+                      className="md:hidden"
+                    />
+                    <span className="text-xl font-heading font-bold">
+                      New chat
+                    </span>
+                  </div>
+
+                  <SearchInput
+                    value={searchContact}
+                    onChange={setSearchContact}
+                    placeholder="Search name or number"
+                  />
+                </div>
+
+                <div className="flex-1 overflow-y-auto pb-20">
+                  {/* New group row */}
+                  <div className="px-4 py-3 hover:bg-muted/50 cursor-pointer">
+                    <div
+                      className="flex items-center gap-3"
+                      onClick={() => {
+                        setNewChatScreen("GROUP_SELECT");
+                        setSelectedGroupContacts([]);
+                        setSearchContact("");
+                      }}
+                    >
+                      <Avatar src={<HiUsers />} alt="Group" size="md" />
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium">New group</h3>
                       </div>
-                      
-                      <SearchInput
-                        value={searchContact}
-                        onChange={setSearchContact}
-                        placeholder="Search name or number"
-                      />
                     </div>
+                  </div>
 
-                    <div className="flex-1 overflow-y-auto pb-20">
-                      {/* New group row */}
-                      <div className="px-4 py-3 hover:bg-muted/50 cursor-pointer">
-                        <div
-                          className="flex items-center gap-3"
-                          onClick={() => {
-                            setNewChatScreen("GROUP_SELECT");
-                            setSelectedGroupContacts([]);
-                            setSearchContact("");
-                          }}
-                        >
-                          <Avatar src={null} alt="Group" size="md">
-                            <HiUsers />
-                          </Avatar>
+                  <div className="px-3 text-sm font-heading font-bold">
+                    Contacts
+                  </div>
 
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium">New group</h3>
-                          </div>
+                  {filteredMatches.map((contact) => (
+                    <div
+                      key={contact.userId}
+                      className="px-4 py-3 hover:bg-muted/50 cursor-pointer"
+                      onClick={() => handleContactClick(contact.userId)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          src={contact.profileImage}
+                          alt={contact.name}
+                          size="md"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium">{contact.name}</h3>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {contact.bio}
+                          </p>
                         </div>
                       </div>
+                    </div>
+                  ))}
 
-                      <div className="px-3 text-sm font-heading font-bold">
-                        Contacts
+                  {filteredUnmatches.map((contact) => (
+                    <div
+                      key={contact.phoneNumber}
+                      className="px-4 py-3 hover:bg-muted/50 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar src={null} alt={contact.name} size="md">
+                          <FaUserAlt />
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-medium">{contact.name}</h3>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {contact.bio}
+                          </p>
+                        </div>
+                        <span className="text-primary font-bold">invite</span>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-                      {filteredMatches.map((contact) => (
+              {/* ======================
+          SCREEN 2: SELECT MEMBERS
+          ====================== */}
+              {newChatScreen === "GROUP_SELECT" && (
+                <div className="absolute inset-0 flex flex-col bg-card animate-[slideIn_0.2s_ease-out]">
+                  <div className="flex flex-col gap-2 px-4 py-4 border-b">
+                    <div className="flex items-center gap-2">
+                      <IconButton
+                        icon={IoMdArrowBack}
+                        variant="ghost"
+                        ariaLabel="Back"
+                        onClick={() => setNewChatScreen("HOME")}
+                      />
+                      <span className="text-xl font-heading font-bold">
+                        New group{" "}
+                        {selectedGroupContacts.length > 0 &&
+                          ` ${selectedGroupContacts.length}`}
+                      </span>
+                    </div>
+
+                    {/* chips + search in one box (like WhatsApp) */}
+                    <div className="flex items-center gap-2 flex-wrap bg-muted rounded-lg px-2 py-1 min-h-[40px]">
+                      {selectedGroupContacts.map((c) => (
+                        <div
+                          key={c.userId}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-card text-xs"
+                        >
+                          <span className="max-w-[90px] truncate">
+                            {c.name}
+                          </span>
+                        </div>
+                      ))}
+
+                      <input
+                        type="text"
+                        className="flex-1 bg-transparent outline-none text-sm py-1 min-w-[80px]"
+                        placeholder={
+                          selectedGroupContacts.length === 0 ? "Search" : ""
+                        }
+                        value={searchContact}
+                        onChange={(e) => setSearchContact(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto pb-20">
+                    <div className="px-3 text-sm font-heading font-bold">
+                      All contacts
+                    </div>
+
+                    {filteredMatches.map((contact) => {
+                      const isSelected = selectedGroupContacts.some(
+                        (c) => c.userId === contact.userId
+                      );
+                      return (
                         <div
                           key={contact.userId}
                           className="px-4 py-3 hover:bg-muted/50 cursor-pointer"
-                          onClick={() => handleContactClick(contact.userId)}
+                          onClick={() => toggleGroupMember(contact)}
                         >
                           <div className="flex items-center gap-3">
                             <Avatar
@@ -672,332 +861,245 @@ export default function ChatList() {
                                 {contact.bio}
                               </p>
                             </div>
-                          </div>
-                        </div>
-                      ))}
-
-                      {filteredUnmatches.map((contact) => (
-                        <div
-                          key={contact.phoneNumber}
-                          className="px-4 py-3 hover:bg-muted/50 cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar src={null} alt={contact.name} size="md">
-                              <FaUserAlt />
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium">{contact.name}</h3>
-                              <p className="text-sm text-muted-foreground truncate">
-                                {contact.bio}
-                              </p>
-                            </div>
-                            <span className="text-primary font-bold">
-                              invite
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* ======================
-          SCREEN 2: SELECT MEMBERS
-          ====================== */}
-                  {newChatScreen === "GROUP_SELECT" && (
-                    <div className="absolute inset-0 flex flex-col bg-card animate-[slideIn_0.2s_ease-out]">
-                      <div className="flex flex-col gap-2 px-4 py-4 border-b">
-                        <div className="flex items-center gap-2">
-                          <IconButton
-                            icon={IoMdArrowBack}
-                            variant="ghost"
-                            ariaLabel="Back"
-                            onClick={() => setNewChatScreen("HOME")}
-                          />
-                          <span className="text-xl font-heading font-bold">
-                            New group{" "}
-                            {selectedGroupContacts.length > 0 &&
-                              ` ${selectedGroupContacts.length}`}
-                          </span>
-                        </div>
-
-                        {/* chips + search in one box (like WhatsApp) */}
-                        <div className="flex items-center gap-2 flex-wrap bg-muted rounded-lg px-2 py-1 min-h-[40px]">
-                          {selectedGroupContacts.map((c) => (
                             <div
-                              key={c.userId}
-                              className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-card text-xs"
-                            >
-                              <span className="max-w-[90px] truncate">
-                                {c.name}
-                              </span>
-                            </div>
-                          ))}
-
-                          <input
-                            type="text"
-                            className="flex-1 bg-transparent outline-none text-sm py-1 min-w-[80px]"
-                            placeholder={
-                              selectedGroupContacts.length === 0 ? "Search" : ""
-                            }
-                            value={searchContact}
-                            onChange={(e) => setSearchContact(e.target.value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex-1 overflow-y-auto pb-20">
-                        <div className="px-3 text-sm font-heading font-bold">
-                          All contacts
-                        </div>
-
-                        {filteredMatches.map((contact) => {
-                          const isSelected = selectedGroupContacts.some(
-                            (c) => c.userId === contact.userId
-                          );
-                          return (
-                            <div
-                              key={contact.userId}
-                              className="px-4 py-3 hover:bg-muted/50 cursor-pointer"
-                              onClick={() => toggleGroupMember(contact)}
-                            >
-                              <div className="flex items-center gap-3">
-                                <Avatar
-                                  src={contact.profileImage}
-                                  alt={contact.name}
-                                  size="md"
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="font-medium">
-                                    {contact.name}
-                                  </h3>
-                                  <p className="text-sm text-muted-foreground truncate">
-                                    {contact.bio}
-                                  </p>
-                                </div>
-                                <div
-                                  className={`w-5 h-5 rounded-sm border flex items-center justify-center
+                              className={`w-5 h-5 rounded-sm border flex items-center justify-center
                       ${
                         isSelected
                           ? "bg-primary border-primary"
                           : "border-muted-foreground/40"
                       }`}
-                                >
-                                  {isSelected && (
-                                    <span className="text-[12px] text-card">
-                                      ✓
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
+                            >
+                              {isSelected && (
+                                <span className="text-[12px] text-card">✓</span>
+                              )}
                             </div>
-                          );
-                        })}
-                      </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                      <div className="px-4 py-3 border-t flex gap-2">
-                        <button
-                          className="flex-1 h-9 rounded-md bg-primary text-card text-sm font-medium disabled:opacity-50"
-                          disabled={selectedGroupContacts.length === 0}
-                          onClick={() => setNewChatScreen("GROUP_DETAILS")}
-                        >
-                          Next
-                        </button>
-                        <button
-                          className="flex-1 h-9 rounded-md border text-sm font-medium"
-                          onClick={() => {
-                            setOpenContactList(false);
-                            setNewChatScreen("HOME");
-                            setSelectedGroupContacts([]);
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <div className="px-4 py-3 border-t flex gap-2">
+                    <button
+                      className="flex-1 h-9 rounded-md bg-primary text-card text-sm font-medium disabled:opacity-50"
+                      disabled={selectedGroupContacts.length === 0}
+                      onClick={() => setNewChatScreen("GROUP_DETAILS")}
+                    >
+                      Next
+                    </button>
+                    <button
+                      className="flex-1 h-9 rounded-md border text-sm font-medium"
+                      onClick={() => {
+                        setOpenContactList(false);
+                        setNewChatScreen("HOME");
+                        setSelectedGroupContacts([]);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
-                  {/* ======================
+              {/* ======================
           SCREEN 3: GROUP DETAILS (your screenshot)
           ====================== */}
-                  {newChatScreen === "GROUP_DETAILS" && (
-                    <div className="absolute inset-0 flex flex-col bg-card animate-[slideIn_0.2s_ease-out]">
-                      <div className="flex flex-col gap-2 px-4 py-4 border-b ">
-                        <div className="flex items-center gap-2">
-                          <IconButton
-                            icon={IoMdArrowBack}
-                            variant="ghost"
-                            ariaLabel="Back"
-                            onClick={() => setNewChatScreen("GROUP_SELECT")}
-                          />
-                          <span className="text-xl font-heading font-bold">
-                            New group{" "}
-                            {selectedGroupContacts.length > 0 &&
-                              ` ${selectedGroupContacts.length}`}
+              {newChatScreen === "GROUP_DETAILS" && (
+                <div className="absolute inset-0 flex flex-col bg-card animate-[slideIn_0.2s_ease-out]">
+                  <div className="flex flex-col gap-2 px-4 py-4 border-b ">
+                    <div className="flex items-center gap-2">
+                      <IconButton
+                        icon={IoMdArrowBack}
+                        variant="ghost"
+                        ariaLabel="Back"
+                        onClick={() => setNewChatScreen("GROUP_SELECT")}
+                      />
+                      <span className="text-xl font-heading font-bold">
+                        New group{" "}
+                        {selectedGroupContacts.length > 0 &&
+                          ` ${selectedGroupContacts.length}`}
+                      </span>
+                    </div>
+
+                    {/* Selected chips box (like your screenshot) */}
+                    <div className="flex items-center gap-2 flex-wrap bg-muted rounded-lg px-2 py-1 min-h-[40px]">
+                      {selectedGroupContacts.map((c) => (
+                        <div
+                          key={c.userId}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-card text-xs"
+                        >
+                          <span className="max-w-[90px] truncate">
+                            {c.name}
                           </span>
                         </div>
+                      ))}
+                    </div>
+                  </div>
 
-                        {/* Selected chips box (like your screenshot) */}
-                        <div className="flex items-center gap-2 flex-wrap bg-muted rounded-lg px-2 py-1 min-h-[40px]">
-                          {selectedGroupContacts.map((c) => (
-                            <div
-                              key={c.userId}
-                              className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-card text-xs"
-                            >
-                              <span className="max-w-[90px] truncate">
-                                {c.name}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                  {/* Body */}
+                  <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+                    {/* Group icon */}
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        {/* Clickable avatar */}
+                        <button
+                          type="button"
+                          onClick={handleGroupIconClick}
+                          className="w-12 h-12 rounded-full bg-muted flex items-center justify-center cursor-pointer overflow-hidden"
+                        >
+                          {groupIconPreview ? (
+                            <img
+                              src={groupIconPreview}
+                              alt="Group"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <FiCamera className="w-5 h-5 opacity-70" />
+                          )}
+                        </button>
 
-                      {/* Body */}
-                      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-                        {/* Group icon */}
-                        <div className="flex items-center gap-3">
-                          <div className="relative">
-                            {/* Clickable avatar */}
+                        {/* Hidden file input */}
+                        <input
+                          ref={groupIconInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleGroupIconChange}
+                        />
+
+                        {/* Popup menu when icon already exists */}
+                        {showGroupIconMenu && groupIconPreview && (
+                          <div className="absolute top-14 left-0 z-50 w-40 bg-card border rounded-lg shadow-lg py-1 text-sm">
                             <button
                               type="button"
-                              onClick={handleGroupIconClick}
-                              className="w-12 h-12 rounded-full bg-muted flex items-center justify-center cursor-pointer overflow-hidden"
+                              className="w-full text-left px-3 py-2 hover:bg-muted/60"
+                              onClick={() => {
+                                setShowGroupIconMenu(false);
+                                openGroupIconPicker();
+                              }}
                             >
-                              {groupIconPreview ? (
-                                <img
-                                  src={groupIconPreview}
-                                  alt="Group"
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <FiCamera className="w-5 h-5 opacity-70" />
-                              )}
+                              Change photo
                             </button>
-
-                            {/* Hidden file input */}
-                            <input
-                              ref={groupIconInputRef}
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={handleGroupIconChange}
-                            />
-
-                            {/* Popup menu when icon already exists */}
-                            {showGroupIconMenu && groupIconPreview && (
-                              <div className="absolute top-14 left-0 z-50 w-40 bg-card border rounded-lg shadow-lg py-1 text-sm">
-                                <button
-                                  type="button"
-                                  className="w-full text-left px-3 py-2 hover:bg-muted/60"
-                                  onClick={() => {
-                                    setShowGroupIconMenu(false);
-                                    openGroupIconPicker();
-                                  }}
-                                >
-                                  Change photo
-                                </button>
-                                <button
-                                  type="button"
-                                  className="w-full text-left px-3 py-2 text-destructive hover:bg-muted/60"
-                                  onClick={handleRemoveGroupIcon}
-                                >
-                                  Remove photo
-                                </button>
-                              </div>
-                            )}
+                            <button
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-destructive hover:bg-muted/60"
+                              onClick={handleRemoveGroupIcon}
+                            >
+                              Remove photo
+                            </button>
                           </div>
-
-                          <div className="text-sm text-muted-foreground">
-                            Add group icon{" "}
-                            <span className="opacity-70">(optional)</span>
-                          </div>
-                        </div>
-
-                        {/* Group name */}
-                        <div className="flex flex-col gap-1">
-                          <span className="text-sm text-muted-foreground">
-                            Provide a group name
-                          </span>
-                          <input
-                            type="text"
-                            className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                            placeholder="Group name (optional)"
-                            value={groupName}
-                            onChange={(e) => setGroupName(e.target.value)}
-                          />
-                        </div>
+                        )}
                       </div>
 
-                      {/* Footer buttons */}
-                      <div className="px-4 py-3 border-t flex gap-2">
-                        <button
-                          className="flex-1 h-9 rounded-md bg-primary text-card text-sm font-medium disabled:opacity-50"
-                          disabled={selectedGroupContacts.length === 0}
-                          onClick={handleCreateGroup}
-                        >
-                          Create
-                        </button>
-                        <button
-                          className="flex-1 h-9 rounded-md border text-sm font-medium"
-                          onClick={() => {
-                            setOpenContactList(false);
-                            setNewChatScreen("HOME");
-                            setSelectedGroupContacts([]);
-                            setGroupName("");
-                            setGroupIconFile(null);
-                            setGroupIconPreview(null);
-                          }}
-                        >
-                          Cancel
-                        </button>
+                      <div className="text-sm text-muted-foreground">
+                        Add group icon{" "}
+                        <span className="opacity-70">(optional)</span>
                       </div>
                     </div>
-                  )}
+
+                    {/* Group name */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm text-muted-foreground">
+                        Provide a group name
+                      </span>
+                      <input
+                        type="text"
+                        className="w-full rounded-xl border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                        placeholder="Group name (optional)"
+                        value={groupName}
+                        onChange={(e) => setGroupName(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer buttons */}
+                  <div className="px-4 py-3 border-t flex gap-2">
+                    <button
+                      className="flex-1 h-9 rounded-md bg-primary text-card text-sm font-medium disabled:opacity-50"
+                      disabled={selectedGroupContacts.length === 0}
+                      onClick={handleCreateGroup}
+                    >
+                      Create
+                    </button>
+                    <button
+                      className="flex-1 h-9 rounded-md border text-sm font-medium"
+                      onClick={() => {
+                        setOpenContactList(false);
+                        setNewChatScreen("HOME");
+                        setSelectedGroupContacts([]);
+                        setGroupName("");
+                        setGroupIconFile(null);
+                        setGroupIconPreview(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ✅ Desktop Context Menu */}
       {contextMenu.visible && (
-        <div
-          className="hidden md:block context-menu absolute bg-white rounded-xl shadow-lg border w-44 py-2"
-          style={{ top: contextMenu.y, left: contextMenu.x, zIndex: 9 }}
-        >
-          <button
-            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-            onClick={() => handleMenuAction("pin")}
-          >
-            {conversationList.find((c) => c.id === contextMenu.conversationId)
-              ?.pinned ? (
-              <div className="flex items-center gap-1">
-                <RiUnpinLine className="w-5 h-5" /> Unpin Chat
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                <BsPinAngle className="w-5 h-5" /> Pin Chat
-              </div>
-            )}
-          </button>
-
-          <button
-            className="block w-full text-left px-4 py-2 hover:bg-gray-100"
-            onClick={() => handleMenuAction("archive")}
-          >
-            <div className="flex items-center gap-1">
-              <LuArchive className="w-5 h-5" /> Archive Chat
-            </div>
-          </button>
-
-          <button
-            className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
-            onClick={() => handleMenuAction("delete")}
-          >
-            <div className="flex items-center gap-1">
-              <RiDeleteBin6Line className="w-5 h-5" /> Delete Chat
-            </div>
-          </button>
+  <div
+    className="hidden md:block context-menu absolute bg-white rounded-xl shadow-lg border w-44 py-2"
+    style={{ top: contextMenu.y, left: contextMenu.x, zIndex: 9 }}
+  >
+    {/* PIN / UNPIN (common for both) */}
+    <button
+      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+      onClick={() => handleMenuAction("pin")}
+    >
+      {contextConversation?.pinned ? (
+        <div className="flex items-center gap-1">
+          <RiUnpinLine className="w-5 h-5" /> Unpin Chat
+        </div>
+      ) : (
+        <div className="flex items-center gap-1">
+          <BsPinAngle className="w-5 h-5" /> Pin Chat
         </div>
       )}
+    </button>
+
+    {/* ARCHIVE (common for both) */}
+    <button
+      className="block w-full text-left px-4 py-2 hover:bg-gray-100"
+      onClick={() => handleMenuAction("archive")}
+    >
+      <div className="flex items-center gap-1">
+        <LuArchive className="w-5 h-5" /> Archive Chat
+      </div>
+    </button>
+
+
+   
+      <button
+        className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
+        onClick={() => handleMenuAction("delete")}
+      >
+        <div className="flex items-center gap-1">
+          <RiDeleteBin6Line className="w-5 h-5" /> Delete Chat
+        </div>
+      </button>
+
+
+    {/* 🚪 EXIT GROUP → sirf GROUP ke liye */}
+    {contextConversation?.type === "GROUP" && (
+      <button
+        className="block w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
+        onClick={() => handleMenuAction("leave")}
+      >
+        <div className="flex items-center gap-1">
+          <RiDeleteBin6Line className="w-5 h-5" /> Exit Group
+        </div>
+      </button>
+    )}
+  </div>
+)}
+
     </div>
   );
 }

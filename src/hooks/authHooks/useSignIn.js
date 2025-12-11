@@ -153,10 +153,55 @@ const useSignIn = () => {
     }
   };
 
+
+  const updateConversationProfile = async ({
+    conversationId,
+    name,
+    description, // group description / bio
+    file,
+  }) => {
+    if (!conversationId) return null;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      const data = {};
+
+      if (name) data.name = name;
+      if (description) data.groupDescription = description; // match your CreateConversationRequest field
+
+      // always send data, even if only name changed
+      formData.append("data", JSON.stringify(data));
+      if (file) {
+        formData.append("file", file);
+      }
+
+      const res = await fetchData({
+        method: "PUT",
+        url: `${conf.apiBaseUrl}conversations/${conversationId}`,
+        data: formData,
+      });
+
+      if (res?.status && res.status >= 400)
+        throw new Error(res?.data?.error || "Failed to update conversation");
+
+      return res?.data || res;
+    } catch (err) {
+      console.error("updateConversationProfile error:", err);
+      setError(err.message || "Failed to update conversation");
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     userSignIn,
     verifyOtp,
     setupProfile,
+    updateConversationProfile,
     loading,
     error,
     logout
