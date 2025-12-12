@@ -1145,55 +1145,6 @@ export default function ChatList() {
                   </div>
                 </div>
               )}
-
-              {/* {newChatScreen === "NEW_CONTACT" && (
-
-                <div className="px-4 py-3 border-t">
-                   <div className="flex flex-col items-center gap-2">
-                     <input
-      type="text"
-      inputMode="tel"
-      className="flex-1 rounded-lg border bg-background px-3 py-2 text-sm outline-none"
-      placeholder="Phone (with country code)"
-      value={newContactPhone}
-      onChange={(e) => setNewContactPhone(e.target.value)}
-    />
-      <input
-      type="text"
-      className="w-40 rounded-lg border bg-background px-3 py-2 text-sm outline-none"
-      placeholder="Name (optional)"
-      value={newContactName}
-      onChange={(e) => setNewContactName(e.target.value)}
-    />
-    <button
-      className="ml-2 h-9 px-3 rounded-md bg-primary text-card text-sm font-medium disabled:opacity-50"
-      onClick={async (e) => {
-        e.stopPropagation();
-        if (!newContactPhone.trim()) {
-          // optionally show UI feedback/toast
-          console.error("Phone required");
-          return;
-        }
-        try {
-          await addContact(newContactPhone.trim(), newContactName.trim());
-          // clear inputs
-          setNewContactPhone("");
-          setNewContactName("");
-          // ensure contact list is reloaded (addContact already calls getContactList, but safe to call again)
-          getContactList();
-        } catch (err) {
-          // show toast or console
-          console.error("Failed to add contact", err);
-        }
-      }}
-    >
-      Add
-    </button>
-
-                   </div>
-                </div>
-                
-              )} */}
             </div>
           </div>
         </div>
