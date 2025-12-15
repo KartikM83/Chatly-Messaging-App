@@ -5,6 +5,7 @@ function useFetch() {
   const fetchData = useCallback(async ({ method, url, data, params,onUploadProgress  }) => {
     try {
       const token = sessionStorage.getItem("token");
+      console.log("TOKEN:", token);
 
       const axiosConfig = {
         method,

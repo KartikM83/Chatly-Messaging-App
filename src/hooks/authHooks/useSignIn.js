@@ -111,11 +111,14 @@ const useSignIn = () => {
 
       const profile = res?.profile || res?.data?.profile;
 
+      localStorage.setItem("user", JSON.stringify(profile));
+
       // Update Recoil state with updated profile
       setAdminResponse((prev) => ({ ...prev, user: profile }));
 
       // Navigate to chats after successful profile setup
       navigate("/chats");
+      
 
       return profile;
     } catch (err) {

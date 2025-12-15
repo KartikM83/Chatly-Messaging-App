@@ -21,18 +21,20 @@ export const useWebSocketClient = () => useContext(WebSocketContext);
 export const WebSocketProvider = ({ children }) => {
   const clientRef = useRef(null);
   const [connected, setConnected] = useState(false);
-  const subscriptionsRef = useRef({}); // { [destination]: subscription }
+  const isMounted = useRef(false);
 
-  const { conversationList, getConversationList, setConversationList } =
-    useContact();
-  const { acknowledgeDelivered, syncDelivered } = useMessage();
+  const { setConversationList, getConversationList } = useContact();
+  const { syncDelivered } = useMessage();
 
-  // 1) Fetch conversation list once (or you can skip if already fetched elsewhere)
+  // ✅ Fetch conversation list once
   useEffect(() => {
-    getConversationList();
+    if (!isMounted.current) {
+      getConversationList();
+      isMounted.current = true;
+    }
   }, []);
 
-  // 2) Setup WS client once
+  // ✅ Setup WS once
   useEffect(() => {
     const apiBase = import.meta.env.VITE_API_BASE_URL || "";
     const wsUrl = apiBase.replace(/\/+$/, "") + "/ws-chat";
@@ -41,52 +43,66 @@ export const WebSocketProvider = ({ children }) => {
     const client = new Client({
       webSocketFactory: () => socket,
       reconnectDelay: 5000,
-      debug: (str) => console.log("[STOMP]", str),
+      heartbeatIncoming: 10000,
+      heartbeatOutgoing: 10000,
+      debug: (str) => {
+        if (import.meta.env.DEV) {
+          console.log("[STOMP]", str);
+        }
+      },
     });
 
     client.onConnect = () => {
-      console.log("✅ Global WebSocket connected");
+      console.log("✅ WebSocket connected (GLOBAL)");
       setConnected(true);
 
-      console.log("[WS] Connected, syncing delivered messages...");
+      // sync delivered messages
       syncDelivered();
 
-      // ⭐ Subscribe to "conversation events" for this user
       const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
       const currentUserId = storedUser?.id;
+      if (!currentUserId) return;
 
-      if (currentUserId) {
-        const destination = `/topic/users/${currentUserId}/conversations`;
-        console.log("🔔 Subscribing to user conversation topic:", destination);
+      const destination = `/topic/users/${currentUserId}/conversations`;
+      console.log("🔔 Subscribed to:", destination);
 
-        const sub = client.subscribe(destination, (message) => {
-          const data = JSON.parse(message.body);
-          console.log("🌍 New/updated conversation via WS:", data);
+      client.subscribe(destination, (message) => {
+        const data = JSON.parse(message.body);
+        console.log("🌍 Conversation update:", data);
 
-          // data is ConversationResponseDTO from backend
-          setConversationList((prev) => {
-            const conv = data;
-            if (!conv || !conv.id) return prev;
+        if (!data?.id) return;
 
-            if (!Array.isArray(prev) || prev.length === 0) {
-              return [conv];
-            }
+        // ✅ SAFE merge (never override with undefined)
+        setConversationList((prev) => {
+          if (!Array.isArray(prev)) return [data];
 
-            // remove existing instance if any (no duplicates)
-            const without = prev.filter((c) => c && c.id !== conv.id);
+          const index = prev.findIndex((c) => c.id === data.id);
 
-            // put new/updated conversation at top
-            return [conv, ...without];
-          });
+          if (index === -1) {
+            // new conversation → top
+            return [data, ...prev];
+          }
+
+          const updated = [...prev];
+          updated[index] = {
+            ...updated[index],
+            ...data,
+            lastMessage:
+              data.lastMessage ?? updated[index].lastMessage,
+            lastMessageAt:
+              data.lastMessageAt ?? updated[index].lastMessageAt,
+            lastMessageType:
+              data.lastMessageType ?? updated[index].lastMessageType,
+          };
+
+          return updated;
         });
-
-        // store subscription so we can clean up if needed
-        subscriptionsRef.current[destination] = sub;
-      }
+      });
     };
 
-    client.onStompError = (frame) => {
-      console.error("❌ STOMP error", frame.headers["message"], frame.body);
+    client.onDisconnect = () => {
+      console.log("🔌 WebSocket disconnected");
+      setConnected(false);
     };
 
     client.onWebSocketClose = () => {
@@ -94,123 +110,23 @@ export const WebSocketProvider = ({ children }) => {
       setConnected(false);
     };
 
+    client.onStompError = (frame) => {
+      console.error("❌ STOMP error", frame.headers["message"], frame.body);
+    };
+
     client.activate();
     clientRef.current = client;
 
     return () => {
-      console.log("🧹 Cleaning up global WS");
+      console.log("🧹 Cleaning up WebSocketProvider");
       setConnected(false);
-      Object.values(subscriptionsRef.current).forEach((sub) =>
-        sub.unsubscribe()
-      );
-      subscriptionsRef.current = {};
-      client.deactivate();
+      try {
+        client.deactivate();
+      } catch (e) {
+  console.warn("WS deactivate failed", e);
+}
     };
   }, []);
-
-  // 3) Subscribe to ALL conversation topics when we know them
-  useEffect(() => {
-    const client = clientRef.current;
-    if (!client || !connected) return;
-    if (!Array.isArray(conversationList)) return;
-
-    const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-    const currentUserId = storedUser?.id;
-
-    conversationList.forEach((conversation) => {
-      if (!conversation || !conversation.id) return;
-
-      const destination = `/topic/conversations/${conversation.id}`;
-
-      // Already subscribed? Skip.
-      if (subscriptionsRef.current[destination]) {
-        return;
-      }
-
-      console.log("🔔 Global subscribe:", destination);
-
-      const subscription = client.subscribe(destination, async (message) => {
-        const data = JSON.parse(message.body);
-        console.log("🌍 Global WS event from", destination, data);
-
-        // ✅ Handle MESSAGE_DELETE events globally
-        if (data.event === "MESSAGE_DELETE") {
-          const { messageId, scope, deletedAt } = data.data || {};
-
-          if (scope === "EVERYONE") {
-            console.log("🗑️ Global delete for everyone detected:", messageId);
-
-            // Refetch conversation list to update lastMessage for ALL users
-            await getConversationList();
-          }
-
-          if (scope === "ME") {
-            console.log("🗑️ Global delete for me detected:", messageId);
-            // Still refetch to ensure consistency
-            await getConversationList();
-          }
-
-          return;
-        }
-
-        // ✅ Handle MESSAGE_EDIT events globally
-        if (data.event === "MESSAGE_EDIT") {
-          const { id, content } = data.data || {};
-
-          console.log("✏️ Global edit detected:", id);
-
-          // Refetch conversation list to update lastMessage if it was edited
-          await getConversationList();
-          return;
-        }
-
-        // -----------------------------
-        // 1. ACK-only events (no content)
-        // -----------------------------
-        const isAck = data.messageId && !data.content;
-        if (isAck) {
-          // Let ChatWindow handle updating message status UI
-          return;
-        }
-
-        // -----------------------------
-        // 2. REAL incoming messages
-        // -----------------------------
-        // If I'm not the sender, I am the receiver -> send DELIVERED ACK
-        if (data.senderId && data.senderId !== currentUserId) {
-          console.log("📩 Passive ACK for message:", data.id);
-
-          // REST call → will trigger backend to mark DELIVERED and broadcast ACK
-          acknowledgeDelivered(data.conversationId || conversation.id, data.id);
-
-          // Update chat list preview (lastMessage/lastMessageAt)
-          setConversationList((prevList) => {
-            if (!Array.isArray(prevList)) return prevList;
-            return prevList.map((conv) =>
-              conv.id === (data.conversationId || conversation.id)
-                ? {
-                    ...conv,
-                    lastMessage: data.content,
-                    lastMessageAt: data.timestamp,
-                  }
-                : conv
-            );
-          });
-        }
-
-        // Note: We do NOT call addMessage here,
-        // ChatWindow's own WS or HTTP fetch will handle detailed message list.
-      });
-
-      subscriptionsRef.current[destination] = subscription;
-    });
-  }, [
-    conversationList,
-    connected,
-    acknowledgeDelivered,
-    setConversationList,
-    getConversationList,
-  ]);
 
   return (
     <WebSocketContext.Provider
