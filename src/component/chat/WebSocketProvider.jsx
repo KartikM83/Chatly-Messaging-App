@@ -100,9 +100,7 @@ export const WebSocketProvider = ({ children }) => {
     clientRef.current = client;
 
     return () => {
-      Object.values(subscriptionsRef.current).forEach((s) =>
-        s?.unsubscribe()
-      );
+      Object.values(subscriptionsRef.current).forEach((s) => s?.unsubscribe());
       subscriptionsRef.current = {};
       client.deactivate();
     };
@@ -121,8 +119,9 @@ export const WebSocketProvider = ({ children }) => {
       const destination = `/topic/conversations/${conv.id}`;
       if (subscriptionsRef.current[destination]) return;
 
-      subscriptionsRef.current[destination] =
-        clientRef.current.subscribe(destination, (msg) => {
+      subscriptionsRef.current[destination] = clientRef.current.subscribe(
+        destination,
+        (msg) => {
           const payload = JSON.parse(msg.body);
           const convId = payload.conversationId || conv.id;
 
@@ -155,12 +154,14 @@ export const WebSocketProvider = ({ children }) => {
                 payload.event === "MESSAGE_DELETE" &&
                 payload.data?.scope === "EVERYONE"
               ) {
-                return {
-                  ...c,
-                  lastMessage: "This message was deleted",
-                  lastMessageType: "TEXT",
-                  lastMessageAt: payload.data.deletedAt,
-                };
+                if (payload.data.messageId === c.lastMessageId) {
+                  return {
+                    ...c,
+                    lastMessage: "This message was deleted",
+                    lastMessageType: "TEXT",
+                    lastMessageAt: payload.data.deletedAt,
+                  };
+                }
               }
 
               /* -----------------------------
@@ -177,10 +178,7 @@ export const WebSocketProvider = ({ children }) => {
               /* -----------------------------
                  📩 NORMAL MESSAGE
               ----------------------------- */
-              if (
-                payload.senderId &&
-                payload.senderId !== currentUserId
-              ) {
+              if (payload.senderId && payload.senderId !== currentUserId) {
                 acknowledgeDelivered(convId, payload.id);
 
                 return {
@@ -194,7 +192,8 @@ export const WebSocketProvider = ({ children }) => {
               return c;
             })
           );
-        });
+        }
+      );
     });
   }, [conversationList, connected]);
 
