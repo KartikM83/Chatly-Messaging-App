@@ -262,196 +262,90 @@ export default function ChatWindow() {
   }
 
   // ⭐ Subscribe to conversation-specific topics using global WS client
+
+
   useEffect(() => {
     if (!conversationId || !wsClient || !wsConnected) return;
 
-    console.log("🔔 ChatWindow subscribing to:", conversationId);
-
-    // Subscribe to conversation messages
     conversationSubscriptionRef.current = wsClient.subscribe(
       `/topic/conversations/${conversationId}`,
-      async (message) => {
+      (message) => {
         const data = JSON.parse(message.body);
-        console.log("💬 ChatWindow received:", data);
 
-        if (data.event === "CONVERSATION_UPDATE") {
-          return;
-        }
-
-        if (data.event === "MESSAGE_REACTION") {
-          return;
-        }
-
-        // MESSAGE_EDIT
+        // ✏️ EDIT
         if (data.event === "MESSAGE_EDIT") {
-          const updated = data.data || {};
-          const { id, content, editedAt } = updated;
-
-          if (!id) return;
-
-          let wasLast = false;
-
-          setMessages((prev) => {
-            if (!prev?.messages) return prev;
-
-            const prevMessages = prev.messages;
-            const lastMsg = prevMessages[prevMessages.length - 1];
-            wasLast = lastMsg?.id === id;
-
-            const newMessages = prevMessages.map((m) =>
-              m.id === id
-                ? {
-                    ...m,
-                    content,
-                    edited: true,
-                    editedAt: editedAt || m.editedAt,
-                  }
+          setMessages((prev) => ({
+            ...prev,
+            messages: prev.messages.map((m) =>
+              m.id === data.data.id
+                ? { ...m, content: data.data.content, edited: true }
                 : m
-            );
-
-            return { ...prev, messages: newMessages };
-          });
-
-          if (wasLast) {
-            setConversationById((prev) => {
-              if (!prev || prev.id !== conversationId) return prev;
-              return {
-                ...prev,
-                lastMessage: content,
-                lastMessageAt: editedAt || prev.lastMessageAt,
-              };
-            });
-
-            setConversationList((prevList) => {
-              if (!Array.isArray(prevList)) return prevList;
-              return prevList.map((conv) =>
-                conv.id === conversationId
-                  ? {
-                      ...conv,
-                      lastMessage: content,
-                      lastMessageAt: editedAt || conv.lastMessageAt,
-                    }
-                  : conv
-              );
-            });
-          }
-
+            ),
+          }));
           return;
         }
 
-        // MESSAGE_DELETE
+        // 🗑️ DELETE
         if (data.event === "MESSAGE_DELETE") {
-          const { messageId, scope, deletedAt } = data.data || {};
-
-          if (scope === "EVERYONE") {
-            let wasLast = false;
-
-            setMessages((prev) => {
-              if (!prev?.messages) return prev;
-
-              const prevMessages = prev.messages;
-              const lastMsg = prevMessages[prevMessages.length - 1];
-              wasLast = lastMsg?.id === messageId;
-
-              const updatedMessages = prevMessages.map((m) =>
-                m.id === messageId
+          if (data.data.scope === "EVERYONE") {
+            setMessages((prev) => ({
+              ...prev,
+              messages: prev.messages.map((m) =>
+                m.id === data.data.messageId
                   ? {
                       ...m,
                       deleted: true,
                       deletedFor: "EVERYONE",
                       content: "This message was deleted",
-                      type: "TEXT",
-                      deletedAt: deletedAt || m.deletedAt,
                     }
                   : m
-              );
-
-              return { ...prev, messages: updatedMessages };
-            });
-
-            if (wasLast) {
-              setConversationById((prev) => {
-                if (!prev || prev.id !== conversationId) return prev;
-                return {
-                  ...prev,
-                  lastMessage: "This message was deleted",
-                  lastMessageType: "TEXT",
-                  lastMessageAt: deletedAt || prev.lastMessageAt,
-                };
-              });
-
-              setConversationList((prevList) => {
-                if (!Array.isArray(prevList)) return prevList;
-                return prevList.map((conv) =>
-                  conv.id === conversationId
-                    ? {
-                        ...conv,
-                        lastMessage: "This message was deleted",
-                        lastMessageType: "TEXT",
-                        lastMessageAt: deletedAt || conv.lastMessageAt,
-                      }
-                    : conv
-                );
-              });
-            }
+              ),
+            }));
           }
 
-          if (scope === "ME") {
-            setMessages((prev) => {
-              if (!prev?.messages) return prev;
-              const newMessages = prev.messages.filter(
-                (m) => m.id !== messageId
-              );
-              return { ...prev, messages: newMessages };
-            });
+          if (data.data.scope === "ME") {
+            setMessages((prev) => ({
+              ...prev,
+              messages: prev.messages.filter(
+                (m) => m.id !== data.data.messageId
+              ),
+            }));
           }
-
           return;
         }
 
-        // ACK-only events
-        const isAck = data.messageId && !data.content;
-        if (isAck) {
+        // ACK
+        if (data.messageId && !data.content) {
           addMessage(data);
           return;
         }
 
-        // Regular messages
+        // normal message
         addMessage(data);
-        updateConversationSummaryWithMessage(data);
       }
     );
 
-    // Subscribe to read receipts
-    readReceiptsSubscriptionRef.current = wsClient.subscribe(
-      `/topic/conversations/${conversationId}/read`,
-      (m) => {
-        const updated = JSON.parse(m.body);
-        setMessages((prev) => {
-          if (!prev || !Array.isArray(prev.messages)) return prev;
-          return {
-            ...prev,
-            messages: prev.messages.map(
-              (msg) => updated.find((u) => u.id === msg.id) || msg
-            ),
-          };
-        });
-      }
-    );
-
-    // Cleanup subscriptions when conversationId changes or component unmounts
     return () => {
-      console.log("🧹 ChatWindow unsubscribing from:", conversationId);
-      if (conversationSubscriptionRef.current) {
-        conversationSubscriptionRef.current.unsubscribe();
-        conversationSubscriptionRef.current = null;
-      }
-      if (readReceiptsSubscriptionRef.current) {
-        readReceiptsSubscriptionRef.current.unsubscribe();
-        readReceiptsSubscriptionRef.current = null;
-      }
+      conversationSubscriptionRef.current?.unsubscribe();
     };
   }, [conversationId, wsClient, wsConnected]);
+
+  // 🗑️ DELETE BUTTON HANDLER
+  const handleDeleteMessage = async (scope) => {
+    const msg = selectedMessage;
+    if (!msg) return;
+
+    await deleteMessageApi(conversationId, msg.id, scope);
+
+    // ❗ ONLY LOCAL for ME
+    if (scope === "ME") {
+      setMessages((prev) => ({
+        ...prev,
+        messages: prev.messages.filter((m) => m.id !== msg.id),
+      }));
+    }
+  };
+
 
   // TEXT message (normal send + edit mode)
   const handleSendMessage = async (text) => {
@@ -559,96 +453,96 @@ export default function ChatWindow() {
     (m) => m.id === messageContextMenu.messageId
   );
 
-  const handleDeleteMessage = async (scope) => {
-    const msg = selectedMessage;
-    if (!msg || !conversationId) return;
+  // const handleDeleteMessage = async (scope) => {
+  //   const msg = selectedMessage;
+  //   if (!msg || !conversationId) return;
 
-    try {
-      await deleteMessageApi(conversationId, msg.id, scope);
+  //   try {
+  //     await deleteMessageApi(conversationId, msg.id, scope);
 
-      const currentMessages = messagess?.messages || [];
+  //     const currentMessages = messagess?.messages || [];
 
-      // =========================
-      // DELETE FOR ME
-      // =========================
-      if (scope === "ME") {
-        const remaining = currentMessages.filter((m) => m.id !== msg.id);
+  //     // =========================
+  //     // DELETE FOR ME
+  //     // =========================
+  //     if (scope === "ME") {
+  //       const remaining = currentMessages.filter((m) => m.id !== msg.id);
 
-        const { text, time } = resolveLastMessage(remaining);
+  //       const { text, time } = resolveLastMessage(remaining);
 
-        // ✅ 1) Update messages atom
-        setMessages((prev) => ({
-          ...prev,
-          messages: remaining,
-        }));
+  //       // ✅ 1) Update messages atom
+  //       setMessages((prev) => ({
+  //         ...prev,
+  //         messages: remaining,
+  //       }));
 
-        // ✅ 2) Update conversation atoms (SEPARATELY)
-        setConversationList((list) =>
-          list.map((c) =>
-            c.id === conversationId
-              ? { ...c, lastMessage: text, lastMessageAt: time }
-              : c
-          )
-        );
+  //       // ✅ 2) Update conversation atoms (SEPARATELY)
+  //       setConversationList((list) =>
+  //         list.map((c) =>
+  //           c.id === conversationId
+  //             ? { ...c, lastMessage: text, lastMessageAt: time }
+  //             : c
+  //         )
+  //       );
 
-        setConversationById((c) =>
-          c ? { ...c, lastMessage: text, lastMessageAt: time } : c
-        );
+  //       setConversationById((c) =>
+  //         c ? { ...c, lastMessage: text, lastMessageAt: time } : c
+  //       );
 
-        return;
-      }
+  //       return;
+  //     }
 
-      // =========================
-      // DELETE FOR EVERYONE
-      // =========================
-      if (scope === "EVERYONE") {
-        const updated = currentMessages.map((m) =>
-          m.id === msg.id
-            ? {
-                ...m,
-                deleted: true,
-                deletedFor: "EVERYONE",
-                content: "This message was deleted",
-                type: "TEXT",
-                deletedAt: new Date().toISOString(),
-              }
-            : m
-        );
+  //     // =========================
+  //     // DELETE FOR EVERYONE
+  //     // =========================
+  //     if (scope === "EVERYONE") {
+  //       const updated = currentMessages.map((m) =>
+  //         m.id === msg.id
+  //           ? {
+  //               ...m,
+  //               deleted: true,
+  //               deletedFor: "EVERYONE",
+  //               content: "This message was deleted",
+  //               type: "TEXT",
+  //               deletedAt: new Date().toISOString(),
+  //             }
+  //           : m
+  //       );
 
-        const { text, time } = resolveLastMessage(updated);
+  //       const { text, time } = resolveLastMessage(updated);
 
-        // ✅ 1) Update messages atom
-        setMessages((prev) => ({
-          ...prev,
-          messages: updated,
-        }));
+  //       // ✅ 1) Update messages atom
+  //       setMessages((prev) => ({
+  //         ...prev,
+  //         messages: updated,
+  //       }));
 
-        // ✅ 2) Update conversation atoms (SEPARATELY)
-        setConversationList((list) =>
-          list.map((c) =>
-            c.id === conversationId
-              ? { ...c, lastMessage: text, lastMessageAt: time }
-              : c
-          )
-        );
+  //       // ✅ 2) Update conversation atoms (SEPARATELY)
+  //       setConversationList((list) =>
+  //         list.map((c) =>
+  //           c.id === conversationId
+  //             ? { ...c, lastMessage: text, lastMessageAt: time }
+  //             : c
+  //         )
+  //       );
 
-        setConversationById((c) =>
-          c ? { ...c, lastMessage: text, lastMessageAt: time } : c
-        );
+  //       setConversationById((c) =>
+  //         c ? { ...c, lastMessage: text, lastMessageAt: time } : c
+  //       );
 
-        return;
-      }
-    } catch (err) {
-      console.error("Delete failed", err);
-    } finally {
-      setMessageContextMenu({
-        visible: false,
-        x: 0,
-        y: 0,
-        messageId: null,
-      });
-    }
-  };
+  //       return;
+  //     }
+  //   } catch (err) {
+  //     console.error("Delete failed", err);
+  //   } finally {
+  //     setMessageContextMenu({
+  //       visible: false,
+  //       x: 0,
+  //       y: 0,
+  //       messageId: null,
+  //     });
+  //   }
+  // };
 
   const handleEditMessage = () => {
   if (!selectedMessage || !conversationId) return;
